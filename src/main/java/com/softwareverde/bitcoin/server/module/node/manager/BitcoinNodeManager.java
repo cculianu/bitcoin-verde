@@ -16,6 +16,8 @@ import com.softwareverde.bitcoin.server.node.BitcoinNode;
 import com.softwareverde.bitcoin.server.node.BitcoinNodeFactory;
 import com.softwareverde.bitcoin.server.node.BitcoinNodeObserver;
 import com.softwareverde.bitcoin.server.node.RequestPriority;
+import com.softwareverde.bitcoin.transaction.Transaction;
+import com.softwareverde.bitcoin.transaction.dsproof.DoubleSpendProofWithTransactions;
 import com.softwareverde.bloomfilter.BloomFilter;
 import com.softwareverde.bloomfilter.MutableBloomFilter;
 import com.softwareverde.concurrent.ConcurrentHashSet;
@@ -36,12 +38,7 @@ import com.softwareverde.util.Container;
 import com.softwareverde.util.Util;
 import com.softwareverde.util.type.time.SystemTime;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
@@ -75,6 +72,7 @@ public class BitcoinNodeManager {
     public static class Context {
         public Integer minNodeCount;
         public Integer maxNodeCount;
+        public Boolean shouldPrioritizeNewConnections;
         public DatabaseManagerFactory databaseManagerFactory;
         public BitcoinNodeFactory nodeFactory;
         public MutableNetworkTime networkTime;
@@ -132,6 +130,7 @@ public class BitcoinNodeManager {
     protected Integer _minNodeCount;
     protected Integer _maxNodeCount;
     protected Boolean _shouldOnlyConnectToSeedNodes = false;
+    protected Boolean _shouldPrioritizeNewConnections = false;
     protected volatile Boolean _isShuttingDown = false;
 
     protected Integer _defaultExternalPort = BitcoinConstants.getDefaultNetworkPort();
@@ -839,8 +838,30 @@ public class BitcoinNodeManager {
 
         // Ensure the NodeManager does not exceed maxNodeCount.
         if ((allNodes.size() + _pendingNodes.size()) >= _maxNodeCount) {
-            bitcoinNode.disconnect();
-            return;
+            final boolean haveConnectedNonPreferredPeers = _otherNodes.size() > 0;
+            if (_shouldPrioritizeNewConnections && haveConnectedNonPreferredPeers) {
+                // find oldest non-preferred peer and disconnect before continuing
+                synchronized (_performanceStatistics) {
+                    final ArrayList<BitcoinNode> otherNodes = new ArrayList<>(_otherNodes.values());
+                    otherNodes.sort(new Comparator<BitcoinNode>() {
+                        @Override
+                        public int compare(final BitcoinNode node0, final BitcoinNode node1) {
+                            final NodePerformance nodePerformance0 = _performanceStatistics.get(node0);
+                            final NodePerformance nodePerformance1 = _performanceStatistics.get(node1);
+                            final Long nodeTimestamp0 = nodePerformance0 != null ? nodePerformance0.connectionTimestampMs : Long.MAX_VALUE;
+                            final Long nodeTimestamp1 = nodePerformance1 != null ? nodePerformance1.connectionTimestampMs : Long.MAX_VALUE;
+                            return nodeTimestamp0.compareTo(nodeTimestamp1);
+                        }
+                    });
+                    final BitcoinNode nodeToDisconnect = otherNodes.get(0);
+                    nodeToDisconnect.disconnect();
+                }
+            }
+            else {
+                // prioritizing existing connections, disconnect from this new node and bail out
+                bitcoinNode.disconnect();
+                return;
+            }
         }
 
         final NodeIpAddress nodeIpAddress = bitcoinNode.getRemoteNodeIpAddress();
@@ -1050,8 +1071,20 @@ public class BitcoinNodeManager {
         return _maxNodeCount;
     }
 
+    public void setShouldPrioritizeNewConnections(final Boolean shouldPrioritizeNewConnections) {
+        _shouldPrioritizeNewConnections = shouldPrioritizeNewConnections;
+    }
+
+    public Boolean shouldPrioritizeNewConnections() {
+        return _shouldPrioritizeNewConnections;
+    }
+
     public void setShouldOnlyConnectToSeedNodes(final Boolean shouldOnlyConnectToSeedNodes) {
         _shouldOnlyConnectToSeedNodes = shouldOnlyConnectToSeedNodes;
+    }
+
+    public Boolean shouldOnlyConnectToSeedNodes() {
+        return _shouldOnlyConnectToSeedNodes;
     }
 
     public void shutdown() {
@@ -1112,6 +1145,12 @@ public class BitcoinNodeManager {
             }
 
             @Override
+            public void onHandshakeComplete(final BitcoinNode bitcoinNode) {
+                // ensure node performance is created
+                _getNodePerformance(bitcoinNode);
+            }
+
+            @Override
             public void onDataRequested(final BitcoinNode bitcoinNode, final MessageType expectedResponseType) {
                 if (_isTrackedResponseType(expectedResponseType)) {
                     final NodePerformance nodePerformance = _getNodePerformance(bitcoinNode);
@@ -1152,6 +1191,21 @@ public class BitcoinNodeManager {
         _synchronizationStatusHandler = context.synchronizationStatusHandler;
 
         _bitcoinNodeHeadBlockFinder = new BitcoinNodeHeadBlockFinder(_databaseManagerFactory, _threadPool, _banFilter);
+    }
+
+    public void broadcastDoubleSpendProof(final DoubleSpendProofWithTransactions doubleSpendProof) {
+        final Sha256Hash doubleSpendProofHash = doubleSpendProof.getHash();
+
+        final Map<NodeId, BitcoinNode> allNodes = _getAllHandshakedNodes();
+        for (BitcoinNode bitcoinNode : allNodes.values()) {
+            final Transaction firstSeenTransaction = doubleSpendProof.getTransaction0();
+            final Transaction doubleSpendTransaction = doubleSpendProof.getTransaction1();
+
+            final boolean matchesFilter = (bitcoinNode.matchesFilter(firstSeenTransaction) || bitcoinNode.matchesFilter(doubleSpendTransaction));
+            if (matchesFilter) {
+                bitcoinNode.transmitDoubleSpendProofHash(doubleSpendProofHash);
+            }
+        }
     }
 
     public Boolean hasBloomFilter() {

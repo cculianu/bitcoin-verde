@@ -13,14 +13,17 @@ import com.softwareverde.bitcoin.server.module.node.database.fullnode.FullNodeDa
 import com.softwareverde.bitcoin.server.module.node.database.indexer.BlockchainIndexerDatabaseManager;
 import com.softwareverde.bitcoin.server.module.node.database.transaction.TransactionDatabaseManager;
 import com.softwareverde.bitcoin.server.module.node.database.transaction.slp.SlpTransactionDatabaseManager;
+import com.softwareverde.bitcoin.server.module.node.handler.transaction.dsproof.DoubleSpendProofStore;
 import com.softwareverde.bitcoin.server.module.node.rpc.NodeRpcHandler;
 import com.softwareverde.bitcoin.slp.SlpTokenId;
 import com.softwareverde.bitcoin.slp.SlpUtil;
 import com.softwareverde.bitcoin.transaction.Transaction;
 import com.softwareverde.bitcoin.transaction.TransactionDeflater;
 import com.softwareverde.bitcoin.transaction.TransactionId;
+import com.softwareverde.bitcoin.transaction.dsproof.DoubleSpendProof;
 import com.softwareverde.bitcoin.transaction.input.TransactionInput;
 import com.softwareverde.bitcoin.transaction.output.TransactionOutput;
+import com.softwareverde.bitcoin.transaction.output.identifier.TransactionOutputIdentifier;
 import com.softwareverde.bitcoin.transaction.script.ScriptPatternMatcher;
 import com.softwareverde.bitcoin.transaction.script.ScriptType;
 import com.softwareverde.bitcoin.transaction.script.locking.LockingScript;
@@ -37,11 +40,13 @@ import com.softwareverde.json.Json;
 import com.softwareverde.logging.Logger;
 import com.softwareverde.util.Util;
 
+import java.math.BigInteger;
 import java.util.HashMap;
 
 public class MetadataHandler implements NodeRpcHandler.MetadataHandler {
 
     protected final FullNodeDatabaseManagerFactory _databaseManagerFactory;
+    protected final DoubleSpendProofStore _doubleSpendProofStore;
 
     protected static void _addMetadataForBlockHeaderToJson(final Sha256Hash blockHash, final Json blockJson, final DatabaseManager databaseConnection) throws DatabaseException {
         final BlockHeaderDatabaseManager blockHeaderDatabaseManager = databaseConnection.getBlockHeaderDatabaseManager();
@@ -67,7 +72,7 @@ public class MetadataHandler implements NodeRpcHandler.MetadataHandler {
         }
     }
 
-    protected static void _addMetadataForTransactionToJson(final Transaction transaction, final Json transactionJson, final FullNodeDatabaseManager databaseManager) throws DatabaseException {
+    protected static void _addMetadataForTransactionToJson(final Transaction transaction, final Json transactionJson, final FullNodeDatabaseManager databaseManager, final DoubleSpendProofStore doubleSpendProofStore) throws DatabaseException {
         final Sha256Hash transactionHash = transaction.getHash();
 
         final BlockHeaderDatabaseManager blockHeaderDatabaseManager = databaseManager.getBlockHeaderDatabaseManager();
@@ -94,6 +99,7 @@ public class MetadataHandler implements NodeRpcHandler.MetadataHandler {
 
         Long transactionFee = 0L;
 
+        final boolean isUnconfirmed;
         { // Include Block hashes which include this transaction...
             final Json blockHashesJson = new Json(true);
             final List<BlockId> blockIds = transactionDatabaseManager.getBlockIds(transactionHash);
@@ -102,6 +108,23 @@ public class MetadataHandler implements NodeRpcHandler.MetadataHandler {
                 blockHashesJson.add(blockHash);
             }
             transactionJson.put("blocks", blockHashesJson);
+            isUnconfirmed = blockIds.isEmpty();
+        }
+
+        if ( isUnconfirmed && (doubleSpendProofStore != null) ) {
+            boolean hasActiveDoubleSpend = false;
+            for (final TransactionInput transactionInput : transaction.getTransactionInputs()) {
+                final TransactionOutputIdentifier transactionOutputIdentifier = TransactionOutputIdentifier.fromTransactionInput(transactionInput);
+                final DoubleSpendProof doubleSpendProof = doubleSpendProofStore.getDoubleSpendProof(transactionOutputIdentifier);
+                if (doubleSpendProof != null) {
+                    hasActiveDoubleSpend = true;
+                    break;
+                }
+            }
+            transactionJson.put("wasDoubleSpent", hasActiveDoubleSpend);
+        }
+        else {
+            transactionJson.put("wasDoubleSpent", null);
         }
 
         { // Process TransactionInputs...
@@ -169,7 +192,7 @@ public class MetadataHandler implements NodeRpcHandler.MetadataHandler {
                     if (previousTransaction != null) {
                         final Boolean isSlpOutput = SlpUtil.isSlpTokenOutput(previousTransaction, previousOutputIndex);
                         if (isSlpOutput) {
-                            final Long slpTokenAmount = SlpUtil.getOutputTokenAmount(previousTransaction, previousOutputIndex);
+                            final BigInteger slpTokenAmount = SlpUtil.getOutputTokenAmount(previousTransaction, previousOutputIndex);
                             final Boolean isSlpBatonOutput = SlpUtil.isSlpTokenBatonHolder(previousTransaction, previousOutputIndex);
 
                             final Json slpOutputJson = new Json(false);
@@ -211,7 +234,7 @@ public class MetadataHandler implements NodeRpcHandler.MetadataHandler {
                     if (hasSlpData && Util.coalesce(isSlpValid, false)) { // SLP
                         final Boolean isSlpOutput = SlpUtil.isSlpTokenOutput(transaction, transactionOutputIndex);
                         if (isSlpOutput) {
-                            final Long slpTokenAmount = SlpUtil.getOutputTokenAmount(transaction, transactionOutputIndex);
+                            final BigInteger slpTokenAmount = SlpUtil.getOutputTokenAmount(transaction, transactionOutputIndex);
                             final Boolean isSlpBatonOutput = SlpUtil.isSlpTokenBatonHolder(transaction, transactionOutputIndex);
 
                             final Json slpOutputJson = new Json(false);
@@ -280,8 +303,9 @@ public class MetadataHandler implements NodeRpcHandler.MetadataHandler {
         transactionJson.put("slp", slpJson);
     }
 
-    public MetadataHandler(final FullNodeDatabaseManagerFactory databaseManagerFactory) {
+    public MetadataHandler(final FullNodeDatabaseManagerFactory databaseManagerFactory, final DoubleSpendProofStore doubleSpendProofStore) {
         _databaseManagerFactory = databaseManagerFactory;
+        _doubleSpendProofStore = doubleSpendProofStore;
     }
 
     @Override
@@ -297,7 +321,7 @@ public class MetadataHandler implements NodeRpcHandler.MetadataHandler {
     @Override
     public void applyMetadataToTransaction(final Transaction transaction, final Json transactionJson) {
         try (final FullNodeDatabaseManager databaseManager = _databaseManagerFactory.newDatabaseManager()) {
-            _addMetadataForTransactionToJson(transaction, transactionJson, databaseManager);
+            _addMetadataForTransactionToJson(transaction, transactionJson, databaseManager, _doubleSpendProofStore);
         }
         catch (final DatabaseException exception) {
             Logger.warn(exception);

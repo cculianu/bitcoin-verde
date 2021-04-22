@@ -299,7 +299,7 @@ public class TransactionValidatorCore implements TransactionValidator {
                 final TransactionOutputIdentifier transactionOutputIdentifierBeingSpent = TransactionOutputIdentifier.fromTransactionInput(transactionInput);
                 final boolean previousOutputIsUniqueToTransaction = spentOutputIdentifiers.add(transactionOutputIdentifierBeingSpent);
                 if (! previousOutputIsUniqueToTransaction) { // The transaction attempted to spend the same previous output twice...
-                    final Json errorJson = _createInvalidTransactionReport("Transaction spends duplicate previousOutput.", transaction, transactionContext);
+                    final Json errorJson = _createInvalidTransactionReport("Transaction spends the same output twice.", transaction, transactionContext);
                     return TransactionValidationResult.invalid(errorJson);
                 }
 
@@ -323,7 +323,7 @@ public class TransactionValidatorCore implements TransactionValidator {
 
                 final TransactionOutput transactionOutputBeingSpent = _getUnspentTransactionOutput(transactionOutputIdentifierBeingSpent);
                 if (transactionOutputBeingSpent == null) {
-                    final Json errorJson = _createInvalidTransactionReport("Transaction output does not exist.", transaction, transactionContext);
+                    final Json errorJson = _createInvalidTransactionReport("Transaction output does not exist or has been spent.", transaction, transactionContext);
                     return TransactionValidationResult.invalid(errorJson);
                 }
 
@@ -335,6 +335,11 @@ public class TransactionValidatorCore implements TransactionValidator {
                 transactionContext.setTransactionInput(transactionInput);
                 transactionContext.setTransactionOutputBeingSpent(transactionOutputBeingSpent);
                 transactionContext.setTransactionInputIndex(i);
+
+                if (unlockingScript.getByteCount() > MAX_SCRIPT_BYTE_COUNT) {
+                    final Json errorJson = _createInvalidTransactionReport("Transaction unlocking script exceeds max size.", transaction, transactionContext);
+                    return TransactionValidationResult.invalid(errorJson);
+                }
 
                 final ScriptRunner.ScriptRunnerResult scriptRunnerResult = scriptRunner.runScript(lockingScript, unlockingScript, transactionContext);
                 final boolean inputIsUnlocked = scriptRunnerResult.isValid;
@@ -362,6 +367,12 @@ public class TransactionValidatorCore implements TransactionValidator {
                 }
 
                 for (final TransactionOutput transactionOutput : transaction.getTransactionOutputs()) {
+                    final LockingScript lockingScript = transactionOutput.getLockingScript();
+                    if (lockingScript.getByteCount() > MAX_SCRIPT_BYTE_COUNT) {
+                        final Json errorJson = _createInvalidTransactionReport("Transaction locking script exceeds max size.", transaction, transactionContext);
+                        return TransactionValidationResult.invalid(errorJson);
+                    }
+
                     final Long transactionOutputAmount = transactionOutput.getAmount();
                     if (transactionOutputAmount < 0L) {
                         final Json errorJson = _createInvalidTransactionReport("TransactionOutput has negative amount.", transaction, transactionContext);
