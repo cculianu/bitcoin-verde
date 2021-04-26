@@ -18,11 +18,11 @@ public class ConfigurationPropertiesExporter {
     public static final String PORT = "database.port";
 
     // Additional database properties
-    public static final String  SHOULD_USE_EMBEDDED_DATABASE = "database.useEmbeddedDatabase";
-    public static final String  MAX_MEMORY_BYTE_COUNT = "database.maxMemoryByteCount";
-    public static final String  LOG_FILE_BYTE_COUNT = "database.logFileByteCount";
+    public static final String SHOULD_USE_EMBEDDED_DATABASE = "database.useEmbeddedDatabase";
+    public static final String MAX_MEMORY_BYTE_COUNT = "database.maxMemoryByteCount";
+    public static final String LOG_FILE_BYTE_COUNT = "database.logFileByteCount";
     public static final String DATABASE_PROPERTIES_DATA_DIRECTORY = "database.dataDirectory";
-    public static final String  INSTALLATION_DIRECTORY = "database.installationDirectory";
+    public static final String INSTALLATION_DIRECTORY = "database.installationDirectory";
 
     // BitcoinProperties
     public static final String BITCOIN_PORT = "bitcoin.port";
