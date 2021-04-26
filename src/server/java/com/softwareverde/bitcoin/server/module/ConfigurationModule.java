@@ -158,9 +158,8 @@ public class ConfigurationModule {
         final OperatingSystemMXBean operatingSystem = ( (operatingSystemMXBean instanceof OperatingSystemMXBean) ? (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean() : null );
         final long maximumMemory = operatingSystem.getTotalPhysicalMemorySize();
 
-        System.out.printf("Specify the maximum amount of memory to used by the application. Default/Recommended: %d G%n", RECOMMENDED_MEMORY / GIB_BYTES);
-        System.out.println("Max memory available: " + (maximumMemory / GIB_BYTES) + " G");
-        System.out.println("Enter bytes (<Integer Value>[K|M|G]):");
+        System.out.printf("Specify the maximum amount of memory to be used by the application. Default/Recommended: %dG%n", RECOMMENDED_MEMORY / GIB_BYTES);
+        System.out.println("Total available memory: " + (maximumMemory / GIB_BYTES) + "G");
 
         final long allocatedMemory = Long.min(maximumMemory, _readMemoryValue(RECOMMENDED_MEMORY));
         if (allocatedMemory <= RECOMMENDED_MEMORY) {
@@ -206,6 +205,7 @@ public class ConfigurationModule {
     }
 
     private long _readMemoryValue(final long defaultValue) throws Exception {
+        System.out.println("Enter bytes (<Integer Value>[K|M|G]):");
         final String userInput = _bufferedReader.readLine();
 
         if (userInput == null || userInput.isEmpty()) {
@@ -235,7 +235,6 @@ public class ConfigurationModule {
         switch (unit) {
             case "K":
                 return  value * KIB_BYTES;
-
             case "M":
                 return value * MIB_BYTES;
             case "G":
