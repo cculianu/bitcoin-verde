@@ -1,15 +1,18 @@
 package com.softwareverde.bitcoin.server.module.node.sync;
 
+import com.softwareverde.bitcoin.bip.UpgradeSchedule;
 import com.softwareverde.bitcoin.block.Block;
 import com.softwareverde.bitcoin.block.BlockId;
 import com.softwareverde.bitcoin.block.header.BlockHeader;
 import com.softwareverde.bitcoin.block.validator.BlockHeaderValidator;
 import com.softwareverde.bitcoin.chain.segment.BlockchainSegmentId;
+import com.softwareverde.bitcoin.context.DifficultyCalculatorFactory;
 import com.softwareverde.bitcoin.context.MultiConnectionDatabaseContext;
 import com.softwareverde.bitcoin.context.NetworkTimeContext;
 import com.softwareverde.bitcoin.context.NodeManagerContext;
 import com.softwareverde.bitcoin.context.SystemTimeContext;
 import com.softwareverde.bitcoin.context.ThreadPoolContext;
+import com.softwareverde.bitcoin.context.UpgradeScheduleContext;
 import com.softwareverde.bitcoin.context.core.BlockHeaderValidatorContext;
 import com.softwareverde.bitcoin.server.database.DatabaseConnection;
 import com.softwareverde.bitcoin.server.message.type.node.feature.NodeFeatures;
@@ -18,10 +21,11 @@ import com.softwareverde.bitcoin.server.module.node.database.DatabaseManagerFact
 import com.softwareverde.bitcoin.server.module.node.database.block.header.BlockHeaderDatabaseManager;
 import com.softwareverde.bitcoin.server.module.node.manager.BitcoinNodeManager;
 import com.softwareverde.bitcoin.server.module.node.manager.NodeFilter;
+import com.softwareverde.bitcoin.server.module.node.sync.inventory.BitcoinNodeBlockInventoryTracker;
 import com.softwareverde.bitcoin.server.node.BitcoinNode;
 import com.softwareverde.bitcoin.server.node.RequestId;
-import com.softwareverde.concurrent.pool.ThreadPool;
 import com.softwareverde.concurrent.service.SleepyService;
+import com.softwareverde.concurrent.threadpool.ThreadPool;
 import com.softwareverde.constable.list.List;
 import com.softwareverde.constable.list.mutable.MutableList;
 import com.softwareverde.cryptography.hash.sha256.Sha256Hash;
@@ -37,7 +41,7 @@ import com.softwareverde.util.type.time.SystemTime;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class BlockHeaderDownloader extends SleepyService {
-    public interface Context extends MultiConnectionDatabaseContext, NetworkTimeContext, NodeManagerContext, SystemTimeContext, ThreadPoolContext { }
+    public interface Context extends MultiConnectionDatabaseContext, NetworkTimeContext, NodeManagerContext, SystemTimeContext, ThreadPoolContext, DifficultyCalculatorFactory, UpgradeScheduleContext { }
 
     public interface NewBlockHeadersAvailableCallback {
         void onNewHeadersReceived(BitcoinNode bitcoinNode, List<BlockHeader> blockHeaders);
@@ -47,7 +51,7 @@ public class BlockHeaderDownloader extends SleepyService {
 
     protected final Context _context;
 
-    protected final BlockDownloadRequester _blockDownloadRequester;
+    protected final BitcoinNodeBlockInventoryTracker _blockInventoryTracker;
     protected final BitcoinNode.DownloadBlockHeadersCallback _downloadBlockHeadersCallback;
 
     protected final Container<Float> _averageBlockHeadersPerSecond = new Container<Float>(0F);
@@ -66,7 +70,7 @@ public class BlockHeaderDownloader extends SleepyService {
 
     protected NewBlockHeadersAvailableCallback _newBlockHeaderAvailableCallback = null;
 
-    protected Boolean _checkForGenesisBlockHeader() {
+    protected Boolean _checkForGenesisBlockHeader() throws DatabaseException {
         final DatabaseManagerFactory databaseManagerFactory = _context.getDatabaseManagerFactory();
         try (final DatabaseManager databaseManager = databaseManagerFactory.newDatabaseManager()) {
             final BlockHeaderDatabaseManager blockHeaderDatabaseManager = databaseManager.getBlockHeaderDatabaseManager();
@@ -78,10 +82,6 @@ public class BlockHeaderDownloader extends SleepyService {
             }
 
             return _hasGenesisBlock;
-        }
-        catch (final DatabaseException exception) {
-            Logger.warn(exception);
-            return false;
         }
     }
 
@@ -114,7 +114,12 @@ public class BlockHeaderDownloader extends SleepyService {
             bitcoinNode.requestBlock(Block.GENESIS_BLOCK_HASH, new BitcoinNode.DownloadBlockCallback() {
                 @Override
                 public void onResult(final RequestId requestId, final BitcoinNode bitcoinNode, final Block block) {
-                    if (_checkForGenesisBlockHeader()) { return; } // NOTE: This can happen if the BlockDownloader received the GenesisBlock first...
+                    try {
+                        if (_checkForGenesisBlockHeader()) { return; } // NOTE: This can happen if the BlockDownloader received the GenesisBlock first...
+                    }
+                    catch (final Exception exception) {
+                        Logger.warn("Unable to check for Genesis Block before processing.", exception);
+                    }
 
                     final Sha256Hash blockHash = block.getHash();
                     Logger.trace("GENESIS RECEIVED: " + blockHash);
@@ -181,8 +186,12 @@ public class BlockHeaderDownloader extends SleepyService {
                 return false;
             }
 
+
+            final UpgradeSchedule upgradeSchedule = _context.getUpgradeSchedule();
+            final DifficultyCalculatorFactory difficultyCalculatorFactory = _context;
             final BlockchainSegmentId blockchainSegmentId = blockHeaderDatabaseManager.getBlockchainSegmentId(blockId);
-            final BlockHeaderValidatorContext blockHeaderValidatorContext = new BlockHeaderValidatorContext(blockchainSegmentId, databaseManager, networkTime);
+            final BlockHeaderValidatorContext blockHeaderValidatorContext = new BlockHeaderValidatorContext(blockchainSegmentId, databaseManager, networkTime, difficultyCalculatorFactory, upgradeSchedule);
+
             final BlockHeaderValidator blockHeaderValidator = new BlockHeaderValidator(blockHeaderValidatorContext);
 
             final BlockHeaderValidator.BlockHeaderValidationResult blockHeaderValidationResult = blockHeaderValidator.validateBlockHeader(blockHeader, blockHeight);
@@ -204,6 +213,7 @@ public class BlockHeaderDownloader extends SleepyService {
         if (blockHeaders.isEmpty()) { return true; }
 
         final VolatileNetworkTime networkTime = _context.getNetworkTime();
+        final DifficultyCalculatorFactory difficultyCalculatorFactory = _context;
         final DatabaseConnection databaseConnection = databaseManager.getDatabaseConnection();
         final BlockHeaderDatabaseManager blockHeaderDatabaseManager = databaseManager.getBlockHeaderDatabaseManager();
 
@@ -285,7 +295,10 @@ public class BlockHeaderDownloader extends SleepyService {
 
             final BlockchainSegmentId blockchainSegmentId = blockHeaderDatabaseManager.getBlockchainSegmentId(firstBlockHeaderId);
 
-            final BlockHeaderValidatorContext blockHeaderValidatorContext = new BlockHeaderValidatorContext(blockchainSegmentId, databaseManager, networkTime);
+
+            final UpgradeSchedule upgradeSchedule = _context.getUpgradeSchedule();
+            final BlockHeaderValidatorContext blockHeaderValidatorContext = new BlockHeaderValidatorContext(blockchainSegmentId, databaseManager, networkTime, difficultyCalculatorFactory, upgradeSchedule);
+
             final BlockHeaderValidator blockHeaderValidator = new BlockHeaderValidator(blockHeaderValidatorContext);
 
             long nextBlockHeight = firstBlockHeight;
@@ -315,12 +328,15 @@ public class BlockHeaderDownloader extends SleepyService {
         }
     }
 
-    protected void _processBlockHeaders(final List<BlockHeader> blockHeaders) {
+    protected void _processBlockHeaders(final List<BlockHeader> blockHeaders, final BitcoinNode bitcoinNode) {
         final MilliTimer storeHeadersTimer = new MilliTimer();
         storeHeadersTimer.start();
 
+        final Integer blockHeaderCount = blockHeaders.getCount();
+        if (blockHeaderCount == 0) { return; }
+
         final BlockHeader firstBlockHeader = blockHeaders.get(0);
-        Logger.debug("Downloaded Block headers: "+ firstBlockHeader.getHash() + " + " + blockHeaders.getCount());
+        Logger.debug("Downloaded Block headers: "+ firstBlockHeader.getHash() + " + " + blockHeaderCount);
 
         final ThreadPool threadPool = _context.getThreadPool();
         final DatabaseManagerFactory databaseManagerFactory = _context.getDatabaseManagerFactory();
@@ -332,28 +348,24 @@ public class BlockHeaderDownloader extends SleepyService {
                 final BlockHeaderDatabaseManager blockHeaderDatabaseManager = databaseManager.getBlockHeaderDatabaseManager();
                 for (final Sha256Hash invalidBlockHash : invalidBlockHashes) {
                     Logger.info("Marking " + invalidBlockHash + " as invalid.");
-                    blockHeaderDatabaseManager.markBlockAsInvalid(invalidBlockHash);
+                    blockHeaderDatabaseManager.markBlockAsInvalid(invalidBlockHash, BlockHeaderDatabaseManager.INVALID_PROCESS_THRESHOLD); // Auto-ban any invalid headers...
                 }
                 return;
             }
 
             for (final BlockHeader blockHeader : blockHeaders) {
                 final Sha256Hash blockHash = blockHeader.getHash();
-
-                threadPool.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (_blockDownloadRequester != null) {
-                            _blockDownloadRequester.requestBlock(blockHeader);
-                        }
-                    }
-                });
-
-                _lastBlockHash = blockHash;
-                _lastBlockHeader = blockHeader;
+                _blockInventoryTracker.markInventoryAvailable(blockHash, bitcoinNode);
             }
 
-            _blockHeaderCount += blockHeaders.getCount();
+            final BlockHeader lastBlockHeader = blockHeaders.get(blockHeaderCount - 1);
+            final Sha256Hash lastBlockHeaderHash = lastBlockHeader.getHash();
+
+            _lastBlockHeader = lastBlockHeader;
+            _lastBlockHash = lastBlockHeaderHash;
+
+            _blockHeaderCount += blockHeaderCount;
+
             _timer.stop();
             final Long millisecondsElapsed = _timer.getMillisecondsElapsed();
             _averageBlockHeadersPerSecond.value = ( (_blockHeaderCount.floatValue() / millisecondsElapsed) * 1000L );
@@ -367,10 +379,10 @@ public class BlockHeaderDownloader extends SleepyService {
         Logger.info("Stored Block Headers: " + firstBlockHeader.getHash() + " - " + _lastBlockHash + " (" + storeHeadersTimer.getMillisecondsElapsed() + "ms)");
     }
 
-    public BlockHeaderDownloader(final Context context, final BlockDownloadRequester blockDownloadRequester) {
+    public BlockHeaderDownloader(final Context context, final BitcoinNodeBlockInventoryTracker blockInventoryTracker) {
         _context = context;
 
-        _blockDownloadRequester = blockDownloadRequester;
+        _blockInventoryTracker = blockInventoryTracker;
         _timer = new MilliTimer();
 
         final SystemTime systemTime = _context.getSystemTime();
@@ -383,7 +395,7 @@ public class BlockHeaderDownloader extends SleepyService {
                 if (_shouldAbort()) { return; }
 
                 try {
-                    _processBlockHeaders(blockHeaders);
+                    _processBlockHeaders(blockHeaders, bitcoinNode);
 
                     final NewBlockHeadersAvailableCallback newBlockHeaderAvailableCallback = _newBlockHeaderAvailableCallback;
                     if (newBlockHeaderAvailableCallback != null) {
@@ -434,8 +446,14 @@ public class BlockHeaderDownloader extends SleepyService {
             _lastBlockHash = Util.coalesce(_lastBlockHash, Block.GENESIS_BLOCK_HASH);
         }
 
-        if (! _checkForGenesisBlockHeader()) {
-            _downloadGenesisBlock();
+        try {
+            if (! _checkForGenesisBlockHeader()) {
+                _downloadGenesisBlock();
+            }
+        }
+        catch (final Exception exception) {
+            Logger.warn("Unable to check for Genesis Block.", exception);
+            try { Thread.sleep(1000L); } catch (final Exception ignored) { }
         }
     }
 
@@ -450,7 +468,10 @@ public class BlockHeaderDownloader extends SleepyService {
 
         final BitcoinNodeManager bitcoinNodeManager = _context.getBitcoinNodeManager();
         final List<BitcoinNode> bitcoinNodes = bitcoinNodeManager.getPreferredNodes();
-        if (bitcoinNodes.isEmpty()) { return false; }
+        if (bitcoinNodes.isEmpty()) {
+            Logger.debug("No peers available.");
+            return false;
+        }
 
         final int index = (int) (Math.random() * bitcoinNodes.getCount());
         final BitcoinNode bitcoinNode = bitcoinNodes.get(index);
@@ -522,7 +543,7 @@ public class BlockHeaderDownloader extends SleepyService {
     }
 
     public void onNewBlockHeaders(final BitcoinNode bitcoinNode, final List<BlockHeader> blockHeaders) {
-        _processBlockHeaders(blockHeaders);
+        _processBlockHeaders(blockHeaders, bitcoinNode);
 
         final NewBlockHeadersAvailableCallback newBlockHeaderAvailableCallback = _newBlockHeaderAvailableCallback;
         if (newBlockHeaderAvailableCallback != null) {

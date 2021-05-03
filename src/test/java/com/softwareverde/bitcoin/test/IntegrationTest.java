@@ -6,8 +6,11 @@ import com.softwareverde.bitcoin.block.header.BlockHeader;
 import com.softwareverde.bitcoin.block.header.BlockHeaderInflater;
 import com.softwareverde.bitcoin.block.header.difficulty.Difficulty;
 import com.softwareverde.bitcoin.block.header.difficulty.work.ChainWork;
+import com.softwareverde.bitcoin.block.validator.difficulty.DifficultyCalculator;
 import com.softwareverde.bitcoin.chain.segment.BlockchainSegmentId;
 import com.softwareverde.bitcoin.chain.time.MedianBlockTime;
+import com.softwareverde.bitcoin.context.DifficultyCalculatorContext;
+import com.softwareverde.bitcoin.context.DifficultyCalculatorFactory;
 import com.softwareverde.bitcoin.context.TransactionValidatorFactory;
 import com.softwareverde.bitcoin.inflater.MasterInflater;
 import com.softwareverde.bitcoin.server.State;
@@ -25,7 +28,7 @@ import com.softwareverde.bitcoin.test.fake.FakeSynchronizationStatus;
 import com.softwareverde.bitcoin.transaction.validator.BlockOutputs;
 import com.softwareverde.bitcoin.transaction.validator.TransactionValidator;
 import com.softwareverde.bitcoin.transaction.validator.TransactionValidatorCore;
-import com.softwareverde.concurrent.pool.MainThreadPool;
+import com.softwareverde.concurrent.threadpool.CachedThreadPool;
 import com.softwareverde.constable.bytearray.ByteArray;
 import com.softwareverde.constable.list.mutable.MutableList;
 import com.softwareverde.cryptography.hash.sha256.Sha256Hash;
@@ -36,6 +39,8 @@ import com.softwareverde.database.mysql.MysqlDatabaseConnectionFactory;
 import com.softwareverde.database.mysql.MysqlDatabaseInitializer;
 import com.softwareverde.database.mysql.connection.ReadUncommittedDatabaseConnectionFactory;
 import com.softwareverde.database.row.Row;
+import com.softwareverde.logging.LogLevel;
+import com.softwareverde.logging.Logger;
 import com.softwareverde.test.database.MysqlTestDatabase;
 import com.softwareverde.test.database.TestDatabase;
 import com.softwareverde.util.Container;
@@ -47,24 +52,35 @@ import java.util.List;
 public class IntegrationTest extends UnitTest {
     protected static final TestDatabase _database = new TestDatabase(new MysqlTestDatabase());
 
-    protected final MainThreadPool _threadPool = new MainThreadPool(1, 1L);
+    protected final CachedThreadPool _threadPool = new CachedThreadPool(1, 1L);
 
     protected final MasterInflater _masterInflater;
-    protected final FakeBlockStore _blockStore;
+    protected final MockBlockStore _blockStore;
     protected final CheckpointConfiguration _checkpointConfiguration;
     protected final DatabaseConnectionFactory _databaseConnectionFactory;
     protected final FullNodeDatabaseManagerFactory _fullNodeDatabaseManagerFactory;
     protected final FullNodeDatabaseManagerFactory _readUncommittedDatabaseManagerFactory;
     protected final SpvDatabaseManagerFactory _spvDatabaseManagerFactory;
     protected final FakeSynchronizationStatus _synchronizationStatus;
+    protected final FakeSynchronizationStatus _syncingSynchronizationStatus;
+    protected final DifficultyCalculatorFactory _difficultyCalculatorFactory;
     protected final TransactionValidatorFactory _transactionValidatorFactory;
 
     protected Long _requiredCoinbaseMaturity = 0L;
 
     public IntegrationTest() {
+        Logger.setLogLevel("com.zaxxer.hikari.pool", LogLevel.WARN);
+        Logger.setLogLevel("com.zaxxer.hikari.pool", LogLevel.WARN);
+        Logger.setLogLevel("ch.vorburger.exec", LogLevel.WARN);
+        Logger.setLogLevel("ch.vorburger.mariadb4j", LogLevel.WARN);
+
         _masterInflater = new CoreInflater();
-        _blockStore = new FakeBlockStore();
+        _blockStore = new MockBlockStore();
         _synchronizationStatus = new FakeSynchronizationStatus();
+
+        _syncingSynchronizationStatus = new FakeSynchronizationStatus();
+        _syncingSynchronizationStatus.setState(State.SYNCHRONIZING);
+
         _checkpointConfiguration = new CheckpointConfiguration() {
             @Override
             public Boolean violatesCheckpoint(final Long blockHeight, final Sha256Hash blockHash) {
@@ -103,6 +119,13 @@ public class IntegrationTest extends UnitTest {
             }
         });
 
+        _difficultyCalculatorFactory = new DifficultyCalculatorFactory() {
+            @Override
+            public DifficultyCalculator newDifficultyCalculator(final DifficultyCalculatorContext context) {
+                return new DifficultyCalculator(context);
+            }
+        };
+
         _transactionValidatorFactory = new TransactionValidatorFactory() {
             @Override
             public TransactionValidator getTransactionValidator(final BlockOutputs blockOutputs, final TransactionValidator.Context transactionValidatorContext) {
@@ -121,7 +144,7 @@ public class IntegrationTest extends UnitTest {
     }
 
     public static void resetDatabase() {
-        final DatabaseInitializer<Connection> databaseInitializer = new MysqlDatabaseInitializer("sql/full_node/init_mysql.sql", 2, BitcoinVerdeDatabase.DATABASE_UPGRADE_HANDLER);
+        final DatabaseInitializer<Connection> databaseInitializer = new MysqlDatabaseInitializer("sql/node/mysql/init.sql", 2, BitcoinVerdeDatabase.DATABASE_UPGRADE_HANDLER);
         try {
             _database.reset();
 
@@ -139,10 +162,12 @@ public class IntegrationTest extends UnitTest {
     public void before() throws Exception {
         IntegrationTest.resetDatabase();
 
+        _threadPool.start();
         _synchronizationStatus.setState(State.ONLINE);
         _synchronizationStatus.setCurrentBlockHeight(Long.MAX_VALUE);
         _blockStore.clear();
 
+        // make sure UTXO set appears initialized
         final Container<Long> uncommittedUtxoBlockHeight = ReflectionUtil.getStaticValue(UnspentTransactionOutputJvmManager.class, "UNCOMMITTED_UTXO_BLOCK_HEIGHT");
         uncommittedUtxoBlockHeight.value = 0L;
 
@@ -163,6 +188,7 @@ public class IntegrationTest extends UnitTest {
     @Override
     public void after() throws Exception {
         Thread.sleep(500L); // Allow Integration DB to complete cleanup before next test.
+        _threadPool.stop();
     }
 
     protected static final String INSERT_BLOCK_QUERY = "INSERT INTO blocks (hash, previous_block_id, block_height, blockchain_segment_id, merkle_root, version, timestamp, median_block_time, difficulty, nonce, chain_work) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";

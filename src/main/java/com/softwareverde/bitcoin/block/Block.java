@@ -10,6 +10,8 @@ import com.softwareverde.constable.list.List;
 import com.softwareverde.cryptography.hash.sha256.Sha256Hash;
 
 public interface Block extends BlockHeaderWithTransactionCount {
+    Integer MIN_BYTES_PER_SIGNATURE_OPERATION = 141;
+
     List<Transaction> getTransactions();
     List<Transaction> getTransactions(BloomFilter bloomFilter);
     CoinbaseTransaction getCoinbaseTransaction();
@@ -17,7 +19,7 @@ public interface Block extends BlockHeaderWithTransactionCount {
     MerkleTree<Transaction> getMerkleTree();
     List<Sha256Hash> getPartialMerkleTree(Integer transactionIndex);
     PartialMerkleTree getPartialMerkleTree(BloomFilter bloomFilter);
-    Boolean hasTransaction(Transaction transaction);
+    Boolean hasTransaction(Sha256Hash transactionHash);
 
     Integer getByteCount();
 

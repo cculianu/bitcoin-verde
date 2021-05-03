@@ -1,9 +1,9 @@
 package com.softwareverde.bitcoin.server.module.explorer.api.v1.get;
 
+import com.softwareverde.bitcoin.rpc.NodeJsonRpcConnection;
 import com.softwareverde.bitcoin.server.module.api.ApiResult;
 import com.softwareverde.bitcoin.server.module.explorer.api.Environment;
 import com.softwareverde.bitcoin.server.module.explorer.api.endpoint.BlocksApi;
-import com.softwareverde.bitcoin.server.module.node.rpc.NodeJsonRpcConnection;
 import com.softwareverde.http.querystring.GetParameters;
 import com.softwareverde.http.querystring.PostParameters;
 import com.softwareverde.http.server.servlet.request.Request;
@@ -39,8 +39,9 @@ public class ListBlockHeadersHandler implements RequestHandler<Environment> {
             {
                 final Long blockHeight = (getParameters.containsKey("blockHeight") ? Util.parseLong(getParameters.get("blockHeight"), null) : null);
                 final Integer maxBlockCount = (getParameters.containsKey("maxBlockCount") ? Util.parseInt(getParameters.get("maxBlockCount"), null) : null);
+                final Boolean rawFormat = (getParameters.containsKey("rawFormat") ? Util.parseBool(getParameters.get("rawFormat"), false) : false);
 
-                final Json rpcResponseJson = nodeJsonRpcConnection.getBlockHeaders(blockHeight, maxBlockCount, false);
+                final Json rpcResponseJson = nodeJsonRpcConnection.getBlockHeaders(blockHeight, maxBlockCount, rawFormat);
                 if (rpcResponseJson == null) {
                     return new JsonResponse(Response.Codes.SERVER_ERROR, new ApiResult(false, "Request timed out."));
                 }

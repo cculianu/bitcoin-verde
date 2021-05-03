@@ -149,7 +149,7 @@ public class BitcoinNodeDatabaseManagerCore implements BitcoinNodeDatabaseManage
 
         final Long hostId = _storeHost(ip);
         databaseConnection.executeSql(
-            new Query("INSERT IGNORE INTO nodes (host_id, port, first_seen_timestamp, last_seen_timestamp, user_agent, head_block_height, head_block_hash) VALUES (?, ?, ?, ?, NULL, ?, ?) ON DUPLICATE KEY UPDATE last_seen_timestamp = VALUES (last_seen_timestamp)")
+            new Query("INSERT INTO nodes (host_id, port, first_seen_timestamp, last_seen_timestamp, user_agent, head_block_height, head_block_hash) VALUES (?, ?, ?, ?, NULL, ?, ?) ON DUPLICATE KEY UPDATE last_seen_timestamp = VALUES (last_seen_timestamp)")
                 .setParameter(hostId)
                 .setParameter(port)
                 .setParameter(now)
@@ -232,14 +232,25 @@ public class BitcoinNodeDatabaseManagerCore implements BitcoinNodeDatabaseManage
     }
 
     @Override
-    public List<BitcoinNodeIpAddress> findNodes(final List<NodeFeatures.Feature> requiredFeatures, final Integer maxCount) throws DatabaseException {
+    public List<BitcoinNodeIpAddress> findNodes(final List<NodeFeatures.Feature> requiredFeatures, final Long secondsSinceLastConnectionAttempt, final Integer maxCount) throws DatabaseException {
+        return this.findNodes(requiredFeatures, null, maxCount);
+    }
+
+    @Override
+    public List<BitcoinNodeIpAddress> findNodes(final List<NodeFeatures.Feature> requiredFeatures, final Long minSecondsSinceLastConnectionAttempt, final Integer requiredPortOrNull, final Integer maxCount) throws DatabaseException {
         final DatabaseConnection databaseConnection = _databaseManager.getDatabaseConnection();
+
+        final Long now = _systemTime.getCurrentTimeInSeconds();
 
         // NOTE: Limiting the port to be the default port is not necessary since the query sorts by connection_count, which is only be incremented on
         //  the off-chance the OS uses the same port for the same node more than once (possible, but unlikely).  Choosing to not filter on the port
         //  allows the connection to nodes that use non-conventional (but still public) ports.
         final java.util.List<Row> rows = databaseConnection.query(
-            new Query("SELECT nodes.id, hosts.host, nodes.port, COUNT(*) AS feature_count FROM nodes INNER JOIN hosts ON hosts.id = nodes.host_id INNER JOIN node_features ON nodes.id = node_features.node_id WHERE nodes.last_handshake_timestamp IS NOT NULL AND hosts.is_banned = 0 AND node_features.feature IN (?) GROUP BY nodes.id HAVING feature_count = ? ORDER BY nodes.last_handshake_timestamp DESC, nodes.connection_count DESC LIMIT " + maxCount)
+            new Query("SELECT nodes.id, hosts.host, nodes.port, COUNT(*) AS feature_count FROM nodes INNER JOIN hosts ON hosts.id = nodes.host_id INNER JOIN node_features ON nodes.id = node_features.node_id WHERE nodes.last_handshake_timestamp IS NOT NULL AND hosts.is_banned = 0 AND (? IS NULL OR nodes.port = ?) AND (? - last_seen_timestamp) > ? AND node_features.feature IN (?) GROUP BY nodes.id HAVING feature_count = ? ORDER BY nodes.last_handshake_timestamp DESC, nodes.connection_count DESC LIMIT " + maxCount)
+                .setParameter(requiredPortOrNull)
+                .setParameter(requiredPortOrNull)
+                .setParameter(now)
+                .setParameter(minSecondsSinceLastConnectionAttempt)
                 .setInClauseParameters(requiredFeatures, ValueExtractor.NODE_FEATURE)
                 .setParameter(requiredFeatures.getCount())
         );
@@ -268,11 +279,15 @@ public class BitcoinNodeDatabaseManagerCore implements BitcoinNodeDatabaseManage
     }
 
     @Override
-    public List<BitcoinNodeIpAddress> findNodes(final Integer maxCount) throws DatabaseException {
+    public List<BitcoinNodeIpAddress> findNodes(final Long secondsSinceLastConnectionAttempt, final Integer maxCount) throws DatabaseException {
         final DatabaseConnection databaseConnection = _databaseManager.getDatabaseConnection();
 
+        final Long now = _systemTime.getCurrentTimeInSeconds();
+
         final java.util.List<Row> rows = databaseConnection.query(
-            new Query("SELECT nodes.id, hosts.host, nodes.port FROM nodes INNER JOIN hosts ON hosts.id = nodes.host_id WHERE hosts.is_banned = 0 ORDER BY nodes.last_handshake_timestamp DESC, nodes.connection_count DESC LIMIT " + maxCount)
+            new Query("SELECT nodes.id, hosts.host, nodes.port FROM nodes INNER JOIN hosts ON hosts.id = nodes.host_id WHERE hosts.is_banned = 0 AND (? - last_seen_timestamp) > ? ORDER BY nodes.last_handshake_timestamp DESC, nodes.connection_count DESC LIMIT " + maxCount)
+                .setParameter(now)
+                .setParameter(secondsSinceLastConnectionAttempt)
         );
 
         final MutableList<BitcoinNodeIpAddress> nodeIpAddresses = new MutableList<BitcoinNodeIpAddress>(rows.size());

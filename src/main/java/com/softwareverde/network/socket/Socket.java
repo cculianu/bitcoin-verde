@@ -1,6 +1,6 @@
 package com.softwareverde.network.socket;
 
-import com.softwareverde.concurrent.pool.ThreadPool;
+import com.softwareverde.concurrent.threadpool.ThreadPool;
 import com.softwareverde.constable.bytearray.ByteArray;
 import com.softwareverde.logging.Logger;
 import com.softwareverde.network.ip.Ip;
@@ -12,11 +12,11 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public abstract class Socket {
+public abstract class Socket implements AutoCloseable {
     private static final Object _nextIdMutex = new Object();
     private static Long _nextId = 0L;
 
-    protected interface ReadThread {
+    protected interface ReadThread extends AutoCloseable {
         interface Callback {
             void onNewMessage(ProtocolMessage protocolMessage);
             void onExit();
@@ -30,6 +30,9 @@ public abstract class Socket {
         void start();
 
         Long getTotalBytesReceived();
+
+        @Override
+        void close();
     }
 
     protected final Long _id;
@@ -42,6 +45,7 @@ public abstract class Socket {
     protected Boolean _isListening = false;
     protected final ReadThread _readThread;
     protected Long _totalBytesSent = 0L;
+    protected String _cachedHost = null;
 
     protected final OutputStream _rawOutputStream;
     protected final InputStream _rawInputStream;
@@ -51,9 +55,13 @@ public abstract class Socket {
     protected final Object _rawOutputStreamWriteMutex = new Object();
 
     protected String _getHost() {
-        Logger.info("INFO: Performing reverse lookup for: " + _socket.getRemoteSocketAddress());
-        final InetAddress inetAddress = _socket.getInetAddress();
-        return (inetAddress != null ? inetAddress.getHostName() : null);
+        if (_cachedHost == null) {
+            Logger.info("INFO: Performing ip lookup for: " + _socket.getRemoteSocketAddress());
+            final InetAddress inetAddress = _socket.getInetAddress();
+            _cachedHost = (inetAddress != null ? inetAddress.getHostName() : null);
+        }
+
+        return _cachedHost;
     }
 
     protected Integer _getPort() {
@@ -88,7 +96,7 @@ public abstract class Socket {
 
         _isClosed = true;
 
-        _readThread.interrupt();
+        _readThread.close();
 
         try {
             _rawInputStream.close();
@@ -224,6 +232,7 @@ public abstract class Socket {
      * Ceases all reads, and closes the socket.
      *  Invoking any write functions after this call throws a runtime exception.
      */
+    @Override
     public void close() {
         _closeSocket();
     }
