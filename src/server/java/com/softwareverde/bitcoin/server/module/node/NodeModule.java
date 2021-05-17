@@ -36,6 +36,7 @@ import com.softwareverde.bitcoin.server.memory.LowMemoryMonitor;
 import com.softwareverde.bitcoin.server.message.BitcoinBinaryPacketFormat;
 import com.softwareverde.bitcoin.server.message.BitcoinProtocolMessage;
 import com.softwareverde.bitcoin.server.message.type.node.address.BitcoinNodeIpAddress;
+import com.softwareverde.bitcoin.server.message.type.node.address.request.RequestPeersMessage;
 import com.softwareverde.bitcoin.server.message.type.node.feature.LocalNodeFeatures;
 import com.softwareverde.bitcoin.server.message.type.node.feature.NodeFeatures;
 import com.softwareverde.bitcoin.server.module.node.database.DatabaseManager;
@@ -65,11 +66,7 @@ import com.softwareverde.bitcoin.server.module.node.handler.transaction.dsproof.
 import com.softwareverde.bitcoin.server.module.node.handler.transaction.dsproof.DoubleSpendProofDatabase;
 import com.softwareverde.bitcoin.server.module.node.handler.transaction.dsproof.DoubleSpendProofProcessor;
 import com.softwareverde.bitcoin.server.module.node.handler.transaction.dsproof.DoubleSpendProofStore;
-import com.softwareverde.bitcoin.server.module.node.manager.BitcoinNodeManager;
-import com.softwareverde.bitcoin.server.module.node.manager.FilterType;
-import com.softwareverde.bitcoin.server.module.node.manager.NodeInitializer;
-import com.softwareverde.bitcoin.server.module.node.manager.RequestDataHandlerMonitor;
-import com.softwareverde.bitcoin.server.module.node.manager.TransactionRelay;
+import com.softwareverde.bitcoin.server.module.node.manager.*;
 import com.softwareverde.bitcoin.server.module.node.manager.banfilter.BanFilter;
 import com.softwareverde.bitcoin.server.module.node.manager.banfilter.BanFilterCore;
 import com.softwareverde.bitcoin.server.module.node.manager.banfilter.DisabledBanFilter;
@@ -91,6 +88,7 @@ import com.softwareverde.bitcoin.server.module.node.sync.transaction.Transaction
 import com.softwareverde.bitcoin.server.module.node.sync.transaction.TransactionProcessor;
 import com.softwareverde.bitcoin.server.node.BitcoinNode;
 import com.softwareverde.bitcoin.server.node.BitcoinNodeFactory;
+import com.softwareverde.bitcoin.server.node.BitcoinNodeObserver;
 import com.softwareverde.bitcoin.server.node.RequestId;
 import com.softwareverde.bitcoin.transaction.Transaction;
 import com.softwareverde.bitcoin.transaction.TransactionId;
@@ -154,6 +152,7 @@ public class NodeModule {
     protected final SlpTransactionProcessor _slpTransactionProcessor;
     protected final RequestDataHandler _requestDataHandler;
     protected final RequestDataHandlerMonitor _transactionWhitelist;
+    protected final NodeAnnouncementTracker _nodeAnnouncementTracker;
     protected final List<SleepyService> _allServices;
 
     protected final BitcoinNodeFactory _bitcoinNodeFactory;
@@ -432,6 +431,21 @@ public class NodeModule {
             }
         }
 
+        { // Initialize NodeAnnouncementTracker
+            _nodeAnnouncementTracker = new NodeAnnouncementTracker(new NodeAnnouncementTracker.NodePromotedCallback() {
+                @Override
+                public void onNodePromoted(BitcoinNode bitcoinNode) {
+                    // TODO: request peer list from node and store in database
+                    bitcoinNode.queueMessage(new RequestPeersMessage());
+                    bitcoinNode.addObserver(new BitcoinNodeObserver() {
+                        
+                    });
+
+                    // TODO: add observer?
+                }
+            });
+        }
+
         final NodeInitializer nodeInitializer;
         { // Initialize NodeInitializer...
             final SpvUnconfirmedTransactionsHandler spvUnconfirmedTransactionsHandler = new SpvUnconfirmedTransactionsHandler(databaseManagerFactory);
@@ -662,6 +676,8 @@ public class NodeModule {
                     final Block block = processBlockResult.block;
                     final Long blockHeight = processBlockResult.blockHeight;
 
+                    _nodeAnnouncementTracker.onNewValidatedBlock(block);
+
                     final Sha256Hash blockHash = block.getHash();
 
                     _blockchainIndexer.wakeUp();
@@ -730,10 +746,15 @@ public class NodeModule {
                 @Override
                 public void onNewHeadersReceived(final BitcoinNode bitcoinNode, final List<BlockHeader> blockHeaders) {
                     {
+                        final Database database = _environment.getDatabase();
+                        final DatabaseConnectionFactory databaseConnectionFactory = _environment.getDatabaseConnectionFactory();
+                        final FullNodeDatabaseManagerFactory databaseManagerFactory = new FullNodeDatabaseManagerFactory(databaseConnectionFactory, database.getMaxQueryBatchSize(), _blockStore, _masterInflater, _checkpointConfiguration);
                         final MutableList<Sha256Hash> blockHashes = new MutableList<Sha256Hash>(blockHeaders.getCount());
                         for (final BlockHeader blockHeader : blockHeaders) {
                             final Sha256Hash blockHash = blockHeader.getHash();
                             blockHashes.add(blockHash);
+
+                            _nodeAnnouncementTracker.onNewHeaderReceived(databaseManagerFactory, bitcoinNode, blockHeader);
                         }
                         blockInventoryMessageHandler.onNewInventory(bitcoinNode, blockHashes);
                     }
@@ -768,7 +789,7 @@ public class NodeModule {
 
             blockInventoryMessageHandler.setNewInventoryReceivedCallback(new BlockInventoryMessageHandler.NewInventoryReceivedCallback() {
                 @Override
-                public void onNewBlockHashesReceived(final List<Sha256Hash> blockHashes) {
+                public void onNewBlockHashesReceived(final BitcoinNode bitcoinNode, final List<Sha256Hash> blockHashes) {
                     _blockDownloader.wakeUp();
                 }
 

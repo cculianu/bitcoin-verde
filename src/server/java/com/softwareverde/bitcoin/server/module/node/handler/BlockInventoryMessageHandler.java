@@ -17,7 +17,7 @@ import com.softwareverde.util.Util;
 
 public class BlockInventoryMessageHandler implements BitcoinNode.BlockInventoryAnnouncementHandler {
     public interface NewInventoryReceivedCallback {
-        default void onNewBlockHashesReceived(List<Sha256Hash> blockHashes) { }
+        default void onNewBlockHashesReceived(BitcoinNode bitcoinNode, List<Sha256Hash> blockHashes) { }
         default void onNewBlockHeadersReceived(BitcoinNode bitcoinNode, List<BlockHeader> blockHeaders) { }
     }
 
@@ -133,7 +133,7 @@ public class BlockInventoryMessageHandler implements BitcoinNode.BlockInventoryA
         if (storeBlockHashesResult.newBlockHashWasReceived) {
             final NewInventoryReceivedCallback newBlockHashesCallback = _newInventoryReceivedCallback;
             if (newBlockHashesCallback != null) {
-                newBlockHashesCallback.onNewBlockHashesReceived(blockHashes);
+                newBlockHashesCallback.onNewBlockHashesReceived(bitcoinNode, blockHashes);
             }
         }
         else if (storeBlockHashesResult.nodeInventoryWasUpdated) {
