@@ -4,8 +4,8 @@ import com.softwareverde.bitcoin.transaction.locktime.ImmutableLockTime;
 import com.softwareverde.bitcoin.transaction.locktime.ImmutableSequenceNumber;
 import com.softwareverde.bitcoin.transaction.locktime.LockTime;
 import com.softwareverde.bitcoin.transaction.locktime.SequenceNumber;
+import com.softwareverde.bitcoin.transaction.script.Script;
 import com.softwareverde.bitcoin.transaction.script.opcode.PushOperation;
-import com.softwareverde.bitcoin.transaction.script.runner.ScriptRunner;
 import com.softwareverde.bitcoin.transaction.script.signature.hashtype.HashType;
 import com.softwareverde.bitcoin.util.bytearray.ByteArrayReader;
 import com.softwareverde.constable.bytearray.ByteArray;
@@ -36,10 +36,10 @@ public class DoubleSpendProofPreimageInflater {
         final Sha256Hash transactionOutputsDigest = Sha256Hash.wrap(byteArrayReader.readBytes(Sha256Hash.BYTE_COUNT, Endian.BIG));
         doubleSpendProofPreimage.setExecutedTransactionOutputsDigest(transactionOutputsDigest);
 
-        final Long pushDataCount = byteArrayReader.readVariableSizedInteger();
-        if (pushDataCount > ScriptRunner.MAX_OPERATION_COUNT) { return null; }
+        final Long pushDataCount = byteArrayReader.readVariableLengthInteger();
+        if (pushDataCount > Script.MAX_OPERATION_COUNT) { return null; }
         for (int i = 0; i < pushDataCount; ++i) {
-            final Long pushDataByteCount = byteArrayReader.readVariableSizedInteger();
+            final Long pushDataByteCount = byteArrayReader.readVariableLengthInteger();
             if (pushDataByteCount > PushOperation.VALUE_MAX_BYTE_COUNT) { return null; }
 
             final ByteArray pushedData = ByteArray.wrap(byteArrayReader.readBytes(pushDataByteCount.intValue(), Endian.BIG));
@@ -63,8 +63,8 @@ public class DoubleSpendProofPreimageInflater {
     public void parseExtraTransactionOutputsDigests(final ByteArrayReader byteArrayReader, final MutableDoubleSpendProofPreimage doubleSpendProofPreimage) {
         if (byteArrayReader.remainingByteCount() < 1) { return; }
 
-        final Long extraDigestCount = byteArrayReader.readVariableSizedInteger();
-        if (extraDigestCount > ScriptRunner.MAX_OPERATION_COUNT) { return; }
+        final Long extraDigestCount = byteArrayReader.readVariableLengthInteger();
+        if (extraDigestCount > Script.MAX_OPERATION_COUNT) { return; }
 
         for (int i = 0; i < extraDigestCount; ++i) {
             final byte hashTypeByte = byteArrayReader.readByte();

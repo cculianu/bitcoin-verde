@@ -2,7 +2,6 @@ package com.softwareverde.bitcoin.block.validator;
 
 import com.softwareverde.bitcoin.bip.UpgradeSchedule;
 import com.softwareverde.bitcoin.block.Block;
-import com.softwareverde.bitcoin.block.BlockInflater;
 import com.softwareverde.bitcoin.block.MutableBlock;
 import com.softwareverde.bitcoin.block.header.BlockHeader;
 import com.softwareverde.bitcoin.block.header.difficulty.Difficulty;
@@ -14,6 +13,7 @@ import com.softwareverde.bitcoin.block.validator.thread.TotalExpenditureTaskHand
 import com.softwareverde.bitcoin.block.validator.thread.TransactionValidationTaskHandler;
 import com.softwareverde.bitcoin.chain.time.MedianBlockTime;
 import com.softwareverde.bitcoin.context.TransactionValidatorFactory;
+import com.softwareverde.bitcoin.server.main.BitcoinConstants;
 import com.softwareverde.bitcoin.transaction.Transaction;
 import com.softwareverde.bitcoin.transaction.coinbase.CoinbaseTransaction;
 import com.softwareverde.bitcoin.transaction.input.TransactionInput;
@@ -58,7 +58,7 @@ public class BlockValidator {
 
         { // Enforce max byte count...
             final Integer blockByteCount = block.getByteCount();
-            if (blockByteCount > BlockInflater.MAX_BYTE_COUNT) {
+            if (blockByteCount > BitcoinConstants.getBlockMaxByteCount()) {
                 return BlockValidationResult.invalid("Block exceeded maximum size.");
             }
         }
@@ -219,9 +219,9 @@ public class BlockValidator {
         }
         if (! invalidTransactions.isEmpty()) { return BlockValidationResult.invalid("Invalid transactions expenditures.", invalidTransactions); }
 
-        final StringBuilder errorMessage = new StringBuilder("Transactions failed to unlock inputs.");
         final int totalSignatureOperationCount;
         {
+            final StringBuilder errorMessage = new StringBuilder("Transactions failed to unlock inputs.");
             boolean allTransactionsAreValid = true;
             int signatureOperationCount = 0;
             for (final TransactionValidationTaskHandler.TransactionValidationTaskResult transactionValidationTaskResult : transactionValidationTaskResults) {
@@ -251,7 +251,7 @@ public class BlockValidator {
         if (upgradeSchedule.isSignatureOperationCountingVersionTwoEnabled(medianBlockTime)) { // Enforce maximum Signature operation count...
             // NOTE: Technically, checking the block's maxSigOp count should be checked "live" instead of at the end, but this check is redundant due to
             //  Transactions having a maximum signature operation count, and blocks having a maximum Transaction count.
-            final int maximumSignatureOperationCount = (BlockInflater.MAX_BYTE_COUNT / Block.MIN_BYTES_PER_SIGNATURE_OPERATION);
+            final int maximumSignatureOperationCount = (BitcoinConstants.getBlockMaxByteCount() / Block.MIN_BYTES_PER_SIGNATURE_OPERATION);
             Logger.trace("Signature Operations: " + totalSignatureOperationCount + " / " + maximumSignatureOperationCount);
             if (totalSignatureOperationCount > maximumSignatureOperationCount) {
                 return BlockValidationResult.invalid("Too many signature operations.");
@@ -282,15 +282,17 @@ public class BlockValidator {
         return BlockValidationResult.valid();
     }
 
-    protected BlockValidationResult _validateBlock(final Block block, final Long blockHeight) {
-        final BlockHeaderValidator blockHeaderValidator = new BlockHeaderValidator(_context);
-        final BlockHeaderValidator.BlockHeaderValidationResult blockHeaderValidationResult = blockHeaderValidator.validateBlockHeader(block, blockHeight);
-        if (! blockHeaderValidationResult.isValid) {
-            return BlockValidationResult.invalid(blockHeaderValidationResult.errorMessage);
-        }
+    protected BlockValidationResult _validateBlock(final Block block, final Long blockHeight, final Boolean skipHeaderValidation) {
+        if (! skipHeaderValidation) {
+            final BlockHeaderValidator blockHeaderValidator = new BlockHeaderValidator(_context);
+            final BlockHeaderValidator.BlockHeaderValidationResult blockHeaderValidationResult = blockHeaderValidator.validateBlockHeader(block, blockHeight);
+            if (! blockHeaderValidationResult.isValid) {
+                return BlockValidationResult.invalid(blockHeaderValidationResult.errorMessage);
+            }
 
-        if (! block.isValid()) {
-            return BlockValidationResult.invalid("Block header is invalid.");
+            if (! block.isValid()) {
+                return BlockValidationResult.invalid("Block header is invalid.");
+            }
         }
 
         { // Ensure the Coinbase Transaction is valid.
@@ -347,7 +349,7 @@ public class BlockValidator {
     }
 
     public BlockValidationResult validateBlock(final Block block, final Long blockHeight) {
-        return _validateBlock(block, blockHeight);
+        return _validateBlock(block, blockHeight, false);
     }
 
     /**
@@ -359,11 +361,11 @@ public class BlockValidator {
         final Difficulty difficulty = prototypeBlock.getDifficulty();
         final PrototypeDifficulty prototypeDifficulty = new PrototypeDifficulty(difficulty);
         mutableBlock.setDifficulty(prototypeDifficulty);
-        return _validateBlock(mutableBlock, blockHeight);
+        return _validateBlock(mutableBlock, blockHeight, false);
     }
 
     public BlockValidationResult validateBlockTransactions(final Block block, final Long blockHeight) {
-        return _validateBlock(block, blockHeight);
+        return _validateBlock(block, blockHeight, true);
     }
 
     public void setShouldLogValidBlocks(final Boolean shouldLogValidBlocks) {

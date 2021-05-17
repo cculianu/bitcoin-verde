@@ -75,6 +75,7 @@ public class BitcoinPropertiesLoader {
         }
 
         bitcoinProperties._banFilterIsEnabled = Util.parseBool(properties.getProperty("bitcoin.enableBanFilter", "1"));
+        bitcoinProperties._pruningModeIsEnabled = Util.parseBool(properties.getProperty("bitcoin.enableBlockPruning", "0"));
         bitcoinProperties._minPeerCount = Util.parseInt(properties.getProperty("bitcoin.minPeerCount", "8"));
         bitcoinProperties._maxPeerCount = Util.parseInt(properties.getProperty("bitcoin.maxPeerCount", "24"));
         bitcoinProperties._maxThreadCount = Util.parseInt(properties.getProperty("bitcoin.maxThreadCount", "4"));
@@ -107,6 +108,8 @@ public class BitcoinPropertiesLoader {
         bitcoinProperties._testNet = Util.parseInt(properties.getProperty("bitcoin.testNet", "0"));
         bitcoinProperties._testNetworkBitcoinPort = Util.parseInt(properties.getProperty("bitcoin.testNetPort", null));
         bitcoinProperties._testNetworkRpcPort = Util.parseInt(properties.getProperty("bitcoin.testNetRpcPort", null));
+
+        bitcoinProperties._blockMaxByteCount = Util.parseInt(properties.getProperty("bitcoin.blockMaxByteCount", String.valueOf(BitcoinConstants.MainNet.defaultBlockMaxByteCount)));
 
         return bitcoinProperties;
     }

@@ -73,6 +73,11 @@ public class MockBlockStore implements PendingBlockStore {
     }
 
     @Override
+    public Boolean blockExists(final Sha256Hash blockHash, final Long blockHeight) {
+        return _blocks.containsKey(blockHash);
+    }
+
+    @Override
     public ByteArray readFromBlock(final Sha256Hash blockHash, final Long blockHeight, final Long diskOffset, final Integer byteCount) {
         final Block block = _blocks.get(blockHash);
         if (block == null) { return null; }
@@ -80,6 +85,11 @@ public class MockBlockStore implements PendingBlockStore {
         final BlockDeflater blockDeflater = _blockInflaters.getBlockDeflater();
         final ByteArray byteArray = blockDeflater.toBytes(block);
         return ByteArray.wrap(byteArray.getBytes(diskOffset.intValue(), byteCount));
+    }
+
+    @Override
+    public String getDataDirectory() {
+        return null;
     }
 
     public void clear() {

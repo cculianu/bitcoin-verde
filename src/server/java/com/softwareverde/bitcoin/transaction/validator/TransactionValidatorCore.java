@@ -3,9 +3,9 @@ package com.softwareverde.bitcoin.transaction.validator;
 import com.softwareverde.bitcoin.bip.UpgradeSchedule;
 import com.softwareverde.bitcoin.block.validator.ValidationResult;
 import com.softwareverde.bitcoin.chain.time.MedianBlockTime;
+import com.softwareverde.bitcoin.server.main.BitcoinConstants;
 import com.softwareverde.bitcoin.transaction.Transaction;
 import com.softwareverde.bitcoin.transaction.TransactionDeflater;
-import com.softwareverde.bitcoin.transaction.TransactionInflater;
 import com.softwareverde.bitcoin.transaction.input.TransactionInput;
 import com.softwareverde.bitcoin.transaction.input.TransactionInputDeflater;
 import com.softwareverde.bitcoin.transaction.locktime.LockTime;
@@ -15,6 +15,7 @@ import com.softwareverde.bitcoin.transaction.locktime.SequenceNumberType;
 import com.softwareverde.bitcoin.transaction.output.TransactionOutput;
 import com.softwareverde.bitcoin.transaction.output.TransactionOutputDeflater;
 import com.softwareverde.bitcoin.transaction.output.identifier.TransactionOutputIdentifier;
+import com.softwareverde.bitcoin.transaction.script.Script;
 import com.softwareverde.bitcoin.transaction.script.locking.LockingScript;
 import com.softwareverde.bitcoin.transaction.script.runner.ScriptRunner;
 import com.softwareverde.bitcoin.transaction.script.runner.context.MutableTransactionContext;
@@ -36,7 +37,7 @@ public class TransactionValidatorCore implements TransactionValidator {
         return TransactionValidator.COINBASE_MATURITY;
     }
     protected Integer _getMaximumSignatureOperations() {
-        return TransactionValidator.MAX_SIGNATURE_OPERATIONS;
+        return Script.MAX_SIGNATURE_OPERATION_COUNT;
     }
 
     protected Json _createInvalidTransactionReport(final String errorMessage, final Transaction transaction, final TransactionContext transactionContext) {
@@ -224,6 +225,10 @@ public class TransactionValidatorCore implements TransactionValidator {
         return ValidationResult.valid();
     }
 
+    protected ScriptRunner _getScriptRunner(final UpgradeSchedule upgradeSchedule) {
+        return new ScriptRunner(upgradeSchedule);
+    }
+
     public TransactionValidatorCore(final Context context) {
         this(null, context);
     }
@@ -238,7 +243,7 @@ public class TransactionValidatorCore implements TransactionValidator {
         final UpgradeSchedule upgradeSchedule = _context.getUpgradeSchedule();
         final Sha256Hash transactionHash = transaction.getHash();
 
-        final ScriptRunner scriptRunner = new ScriptRunner(upgradeSchedule);
+        final ScriptRunner scriptRunner = _getScriptRunner(upgradeSchedule);
 
         final Long previousBlockHeight = (blockHeight - 1L);
         final MedianBlockTime medianBlockTime = _context.getMedianBlockTime(previousBlockHeight);
@@ -252,7 +257,7 @@ public class TransactionValidatorCore implements TransactionValidator {
         { // Enforce Transaction minimum byte count...
             if (upgradeSchedule.areTransactionsLessThanOneHundredBytesDisallowed(blockHeight)) {
                 final Integer transactionByteCount = transaction.getByteCount();
-                if (transactionByteCount < TransactionInflater.MIN_BYTE_COUNT) {
+                if (transactionByteCount < BitcoinConstants.getTransactionMinByteCount()) {
                     final Json errorJson = _createInvalidTransactionReport("Invalid byte count." + transactionByteCount + " " + transactionHash, transaction, transactionContext);
                     return TransactionValidationResult.invalid(errorJson);
                 }
@@ -336,11 +341,6 @@ public class TransactionValidatorCore implements TransactionValidator {
                 transactionContext.setTransactionOutputBeingSpent(transactionOutputBeingSpent);
                 transactionContext.setTransactionInputIndex(i);
 
-                if (unlockingScript.getByteCount() > MAX_SCRIPT_BYTE_COUNT) {
-                    final Json errorJson = _createInvalidTransactionReport("Transaction unlocking script exceeds max size.", transaction, transactionContext);
-                    return TransactionValidationResult.invalid(errorJson);
-                }
-
                 final ScriptRunner.ScriptRunnerResult scriptRunnerResult = scriptRunner.runScript(lockingScript, unlockingScript, transactionContext);
                 final boolean inputIsUnlocked = scriptRunnerResult.isValid;
                 if (! inputIsUnlocked) {
@@ -367,12 +367,6 @@ public class TransactionValidatorCore implements TransactionValidator {
                 }
 
                 for (final TransactionOutput transactionOutput : transaction.getTransactionOutputs()) {
-                    final LockingScript lockingScript = transactionOutput.getLockingScript();
-                    if (lockingScript.getByteCount() > MAX_SCRIPT_BYTE_COUNT) {
-                        final Json errorJson = _createInvalidTransactionReport("Transaction locking script exceeds max size.", transaction, transactionContext);
-                        return TransactionValidationResult.invalid(errorJson);
-                    }
-
                     final Long transactionOutputAmount = transactionOutput.getAmount();
                     if (transactionOutputAmount < 0L) {
                         final Json errorJson = _createInvalidTransactionReport("TransactionOutput has negative amount.", transaction, transactionContext);
