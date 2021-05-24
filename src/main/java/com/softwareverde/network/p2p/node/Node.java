@@ -391,6 +391,8 @@ public abstract class Node {
         final List<NodeIpAddress> nodeIpAddresses = nodeIpAddressMessage.getNodeIpAddresses();
         if (nodeIpAddresses.isEmpty() || (! _hasHadPeersRequested.get())) { return; }
 
+        Logger.debug("Calling onNodeAddressesReceivedCallback");
+
         if (nodeAddressesReceivedCallback != null) {
             _threadPool.execute(new Runnable() {
                 @Override

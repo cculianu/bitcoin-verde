@@ -80,12 +80,16 @@ public class NodeAnnouncementTracker {
     }
 
     private void _rewardBitcoinNodeOnValidatedBlock(final HeaderAnnouncement headerAnnouncement) {
+        Logger.trace("Attempting to reward node...");
         final BitcoinNode bitcoinNode = headerAnnouncement.getBitcoinNode().get();
         if (bitcoinNode != null) {
             final Integer currentNodeScore = _nodeScores.getOrDefault(bitcoinNode, 0);
             final int updatedNodeScore = currentNodeScore + 1;
 
+            Logger.trace("Rewarding node " + bitcoinNode.getId());
+            Logger.trace("Current scores: " + _nodeScores);
             if (updatedNodeScore == PROMOTION_THRESHOLD) {
+                Logger.debug("Promoting node " + bitcoinNode.getId());
                 _nodePromotedCallback.onNodePromoted(bitcoinNode);
                 _nodeScores.remove(bitcoinNode);
                 return;
