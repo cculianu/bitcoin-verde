@@ -1,5 +1,6 @@
 package com.softwareverde.network.p2p.node;
 
+import com.softwareverde.bitcoin.server.message.type.node.address.request.RequestPeersMessage;
 import com.softwareverde.concurrent.threadpool.ThreadPool;
 import com.softwareverde.concurrent.threadpool.ThreadPoolThrottle;
 import com.softwareverde.constable.list.List;
@@ -65,6 +66,7 @@ public abstract class Node {
     protected final ConcurrentLinkedQueue<ProtocolMessage> _postHandshakeMessageQueue = new ConcurrentLinkedQueue<ProtocolMessage>();
     protected Long _networkTimeOffset; // This field is an offset (in milliseconds) that should be added to the local time in order to adjust local SystemTime to this node's NetworkTime...
     protected final AtomicBoolean _hasBeenDisconnected = new AtomicBoolean(false);
+    protected final AtomicBoolean _hasHadPeersRequested = new AtomicBoolean(false);
 
     protected final ConcurrentHashMap<Long, PingRequest> _pingRequests = new ConcurrentHashMap<Long, PingRequest>();
 
@@ -387,7 +389,7 @@ public abstract class Node {
     protected void _onNodeAddressesReceived(final NodeIpAddressMessage nodeIpAddressMessage) {
         final NodeAddressesReceivedCallback nodeAddressesReceivedCallback = _nodeAddressesReceivedCallback;
         final List<NodeIpAddress> nodeIpAddresses = nodeIpAddressMessage.getNodeIpAddresses();
-        if (nodeIpAddresses.isEmpty()) { return; }
+        if (nodeIpAddresses.isEmpty() || (! _hasHadPeersRequested.get())) { return; }
 
         if (nodeAddressesReceivedCallback != null) {
             _threadPool.execute(new Runnable() {
@@ -429,6 +431,13 @@ public abstract class Node {
         if (count == 0L) { return null; }
 
         return (sum / count);
+    }
+
+    protected void _requestPeers() {
+        final RequestPeersMessage requestPeersMessage = new RequestPeersMessage();
+        _queueMessage(requestPeersMessage);
+
+        _hasHadPeersRequested.set(true);
     }
 
     public Node(final String host, final Integer port, final BinaryPacketFormat binaryPacketFormat, final ThreadPool threadPool) {
@@ -650,5 +659,9 @@ public abstract class Node {
 
     public Long getTotalBytesSentCount() {
         return _connection.getTotalBytesSentCount();
+    }
+
+    public void setHasHadPeersRequested(final boolean hasHadPeersRequested) {
+        _hasHadPeersRequested.set(hasHadPeersRequested);
     }
 }

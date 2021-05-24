@@ -2210,4 +2210,12 @@ public class BitcoinNode extends Node {
     public void setUnsolicitedBlockReceivedCallback(final DownloadBlockCallback unsolicitedBlockReceivedCallback) {
         _unsolicitedBlockReceivedCallback = unsolicitedBlockReceivedCallback;
     }
+
+    public void requestPeers() {
+        _requestPeers();
+
+        for (final BitcoinNodeObserver observer : _observers) {
+            observer.onDataRequested(this, MessageType.REQUEST_PEERS);
+        }
+    }
 }

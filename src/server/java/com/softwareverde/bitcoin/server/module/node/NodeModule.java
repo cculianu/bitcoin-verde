@@ -36,7 +36,6 @@ import com.softwareverde.bitcoin.server.memory.LowMemoryMonitor;
 import com.softwareverde.bitcoin.server.message.BitcoinBinaryPacketFormat;
 import com.softwareverde.bitcoin.server.message.BitcoinProtocolMessage;
 import com.softwareverde.bitcoin.server.message.type.node.address.BitcoinNodeIpAddress;
-import com.softwareverde.bitcoin.server.message.type.node.address.request.RequestPeersMessage;
 import com.softwareverde.bitcoin.server.message.type.node.feature.LocalNodeFeatures;
 import com.softwareverde.bitcoin.server.message.type.node.feature.NodeFeatures;
 import com.softwareverde.bitcoin.server.module.node.database.DatabaseManager;
@@ -101,7 +100,6 @@ import com.softwareverde.bitcoin.server.module.node.sync.transaction.Transaction
 import com.softwareverde.bitcoin.server.module.node.sync.transaction.TransactionProcessor;
 import com.softwareverde.bitcoin.server.node.BitcoinNode;
 import com.softwareverde.bitcoin.server.node.BitcoinNodeFactory;
-import com.softwareverde.bitcoin.server.node.BitcoinNodeObserver;
 import com.softwareverde.bitcoin.server.node.RequestId;
 import com.softwareverde.bitcoin.transaction.Transaction;
 import com.softwareverde.bitcoin.transaction.TransactionId;
@@ -486,13 +484,7 @@ public class NodeModule {
             _nodeAnnouncementTracker = new NodeAnnouncementTracker(new NodeAnnouncementTracker.NodePromotedCallback() {
                 @Override
                 public void onNodePromoted(BitcoinNode bitcoinNode) {
-                    // TODO: request peer list from node and store in database
-                    bitcoinNode.queueMessage(new RequestPeersMessage());
-                    bitcoinNode.addObserver(new BitcoinNodeObserver() {
-                        
-                    });
-
-                    // TODO: add observer?
+                    bitcoinNode.requestPeers();
                 }
             });
         }
