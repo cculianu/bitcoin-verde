@@ -13,7 +13,7 @@ if [[ "$1" != '--low-resources' ]]; then
     PARAMS='-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:NewSize=128M -XX:MaxNewSize=128M -XX:+UnlockExperimentalVMOptions -XX:InitiatingHeapOccupancyPercent=20 -XX:G1OldCSetRegionThresholdPercent=90 -XX:G1MixedGCLiveThresholdPercent=50 -XX:MaxGCPauseMillis=1000'
 fi
 
-echo exec java ${PARAMS} -jar bin/main.jar "NODE" "conf/server.conf"
+exec java ${PARAMS} -jar bin/main.jar "NODE" "conf/server.conf"
 
 EOF
 )
