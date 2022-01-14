@@ -1,13 +1,25 @@
 #!/bin/bash
 
-# This JVM GC parameters are a pretty healthy configuration with used-footprint staying below 1G.  Collection times were about 1.8ms long and occurred about once every 2 seconds.
-# Additionally, the G1 collector does compacting quite well ensuring long-life stability, and collects most objects in parallel. G1 also shrinks the memory footprint when not in use.
-# Setting -XX:InitiatingHeapOccupancyPercent to 20 increases the frequency that old-generation objects are attempted to be collected.
-# Setting -XX:G1MixedGCLiveThresholdPercent to 50 to encourage collecting "old" data before expanding the heap.
-JVM_PARAMS='-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:NewSize=128M -XX:MaxNewSize=128M -XX:+UnlockExperimentalVMOptions -XX:InitiatingHeapOccupancyPercent=20 -XX:G1OldCSetRegionThresholdPercent=90 -XX:G1MixedGCLiveThresholdPercent=50 -XX:MaxGCPauseMillis=1000'
+RUN_NODE_SCRIPT=$(
+cat << EOF
+#!/bin/bash
+
+PARAMS=''
+if [[ "$1" != '--low-resources' ]]; then
+    # This JVM GC parameters are a pretty healthy configuration with used-footprint staying below 1G.  Collection times were about 1.8ms long and occurred about once every 2 seconds.
+    # Additionally, the G1 collector does compacting quite well ensuring long-life stability, and collects most objects in parallel. G1 also shrinks the memory footprint when not in use.
+    # Setting -XX:InitiatingHeapOccupancyPercent to 20 increases the frequency that old-generation objects are attempted to be collected.
+    # Setting -XX:G1MixedGCLiveThresholdPercent to 50 to encourage collecting "old" data before expanding the heap.
+    PARAMS='-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:NewSize=128M -XX:MaxNewSize=128M -XX:+UnlockExperimentalVMOptions -XX:InitiatingHeapOccupancyPercent=20 -XX:G1OldCSetRegionThresholdPercent=90 -XX:G1MixedGCLiveThresholdPercent=50 -XX:MaxGCPauseMillis=1000'
+fi
+
+echo exec java ${PARAMS} -jar bin/main.jar "NODE" "conf/server.conf"
+
+EOF
+)
 
 echo -e "#!/bin/bash\n\nexec java -jar bin/main.jar \"\$@\"\n" > out/run.sh
-echo -e "#!/bin/bash\n\nexec java ${JVM_PARAMS} -jar bin/main.jar \"NODE\" \"conf/server.conf\"\n" > out/run-node.sh
+echo "${RUN_NODE_SCRIPT}" > out/run-node.sh
 echo -e "#!/bin/bash\n\nexec java ${JVM_PARAMS} -jar bin/main.jar \"EXPLORER\" \"conf/server.conf\"\n" > out/run-explorer.sh
 echo -e "#!/bin/bash\n\nexec java -jar bin/main.jar \"SPV\" \"conf/server.conf\"\n" > out/run-spv.sh
 echo -e "#!/bin/bash\n\nexec java -jar bin/main.jar \"WALLET\" \"conf/server.conf\"\n" > out/run-wallet.sh
