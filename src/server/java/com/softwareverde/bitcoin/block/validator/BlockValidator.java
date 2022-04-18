@@ -130,7 +130,7 @@ public class BlockValidator {
         { // Validate coinbase contains block height...
             if (upgradeSchedule.isBlockHeightWithinCoinbaseRequired(blockHeight)) {
                 final Long blockVersion = block.getVersion();
-                if (blockVersion < 2L) {
+                if (blockVersion <= 1L) {
                     totalExpenditureValidationTaskSpawner.abort();
                     transactionValidationTaskSpawner.abort();
                     return BlockValidationResult.invalid("Invalid block version: " + blockVersion);

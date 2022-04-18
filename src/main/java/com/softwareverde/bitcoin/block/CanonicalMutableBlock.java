@@ -93,6 +93,7 @@ public class CanonicalMutableBlock extends MutableBlock {
     @Override
     public void addTransaction(final Transaction newTransaction) {
         _addTransaction(newTransaction);
+        _invalidateCachedProperties();
     }
 
     @Override
@@ -104,10 +105,29 @@ public class CanonicalMutableBlock extends MutableBlock {
 
         _transactions.remove(index);
         _addTransaction(transaction); // Also rebuilds the MerkleTree...
+        _invalidateCachedProperties();
     }
 
     @Override
     public void removeTransaction(final Sha256Hash transactionHashToRemove) {
         super.removeTransaction(transactionHashToRemove);
+    }
+
+    public void setTransactions(final Transaction coinbaseTransaction, final List<Transaction> transactions) {
+        _transactions.clear();
+        _merkleTree.clear();
+
+        _transactions.add(coinbaseTransaction);
+        _merkleTree.addItem(coinbaseTransaction);
+
+        if (transactions == null) { return; }
+
+        final List<Transaction> sortedTransactions = CanonicalMutableBlock.sortTransactions(transactions);
+        _transactions.addAll(sortedTransactions);
+        for (final Transaction transaction : sortedTransactions) {
+            _merkleTree.addItem(transaction);
+        }
+
+        _invalidateCachedProperties();
     }
 }

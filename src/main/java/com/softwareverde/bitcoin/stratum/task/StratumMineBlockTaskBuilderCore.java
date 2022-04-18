@@ -195,12 +195,7 @@ public class StratumMineBlockTaskBuilderCore implements MutableStratumMineBlockT
         _prototypeBlockWriteLock.lock();
         try {
             final Transaction coinbaseTransaction = _prototypeBlock.getCoinbaseTransaction();
-
-            _prototypeBlock.clearTransactions();
-            _prototypeBlock.addTransaction(coinbaseTransaction);
-            for (final Transaction transaction : transactions) {
-                _prototypeBlock.addTransaction(transaction);
-            }
+            _prototypeBlock.setTransactions(coinbaseTransaction, transactions);
         }
         finally {
             _prototypeBlockWriteLock.unlock();

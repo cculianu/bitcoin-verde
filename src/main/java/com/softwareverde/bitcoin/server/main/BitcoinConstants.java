@@ -80,6 +80,12 @@ public class BitcoinConstants {
         Difficulty.decode(ByteArray.wrap(HexUtil.hexStringToByteArray("1D00FFFF")))
     );
 
+    protected static AsertReferenceBlock INTRA_NET_ASERT_REFERENCE_BLOCK = new AsertReferenceBlock(
+        144L,
+        1231692104L,
+        Difficulty.decode(ByteArray.wrap(HexUtil.hexStringToByteArray("1D00FFFF")))
+    );
+
     public static final Default MainNet = new Default(
         "000000000019D6689C085AE165831E934FF763AE46A2A6C172B3F1B60A8CE26F",
         1231006505L, // In seconds.
@@ -105,6 +111,15 @@ public class BitcoinConstants {
         "AFDAB7E2",
         TEST_NET4_ASERT_REFERENCE_BLOCK,
         (int) (32L * ByteUtil.Unit.Si.MEGABYTES)
+    );
+
+    public static final Default IntraNet = new Default(
+        "000000000019D6689C085AE165831E934FF763AE46A2A6C172B3F1B60A8CE26F",
+        1231006505L, // In seconds.
+        8333,
+        "E8F3E1E3",
+        INTRA_NET_ASERT_REFERENCE_BLOCK,
+        (int) (256L * ByteUtil.Unit.Si.MEGABYTES)
     );
 
     static {

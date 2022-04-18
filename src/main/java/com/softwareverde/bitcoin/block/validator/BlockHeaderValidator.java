@@ -47,6 +47,15 @@ public class BlockHeaderValidator {
             return BlockHeaderValidationResult.invalid("Block header is invalid.");
         }
 
+        { // Validate Block Version...
+            if (upgradeSchedule.isBlockHeightWithinCoinbaseRequired(blockHeight)) {
+                final Long blockVersion = blockHeader.getVersion();
+                if (blockVersion <= 1L) {
+                    return BlockHeaderValidationResult.invalid("Invalid block version: " + blockVersion);
+                }
+            }
+        }
+
         { // Validate Block Timestamp...
             final Long blockTime = blockHeader.getTimestamp();
             final Long minimumTimeInSeconds;

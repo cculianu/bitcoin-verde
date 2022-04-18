@@ -3,16 +3,17 @@ package com.softwareverde.bitcoin.bip;
 import com.softwareverde.bitcoin.chain.time.MedianBlockTime;
 
 public class TestNet4UpgradeSchedule implements UpgradeSchedule {
+    private static final long BIP16_ACTIVATION_BLOCK_HEIGHT = 1L;
+    private static final long BIP34_ACTIVATION_BLOCK_HEIGHT = 2L;
+    private static final long BIP65_ACTIVATION_BLOCK_HEIGHT = 3L;
+    private static final long BIP66_ACTIVATION_BLOCK_HEIGHT = 4L;
+    private static final long BIP68_ACTIVATION_BLOCK_HEIGHT = 5L;
+    private static final long BIP112_ACTIVATION_BLOCK_HEIGHT = 5L;
+    private static final long BIP113_ACTIVATION_BLOCK_HEIGHT = 5L;
+
     // NOTE: BCH-specific activation heights are usually one greater than the BCHN activation heights
     //       since BCHN uses the previous block height for activations.
 
-    private static final long BIP16_ACTIVATION_BLOCK_HEIGHT = 2L;
-    private static final long BIP34_ACTIVATION_BLOCK_HEIGHT = 3L;
-    private static final long BIP65_ACTIVATION_BLOCK_HEIGHT = 4L;
-    private static final long BIP66_ACTIVATION_BLOCK_HEIGHT = 5L;
-    private static final long BIP68_ACTIVATION_BLOCK_HEIGHT = 6L;
-    private static final long BIP112_ACTIVATION_BLOCK_HEIGHT = 6L;
-    private static final long BIP113_ACTIVATION_BLOCK_HEIGHT = 6L;
     private static final long BUIP55_ACTIVATION_BLOCK_HEIGHT = 7L; // a.k.a. UAHF
     private static final long HF20171113_ACTIVATION_BLOCK_HEIGHT = 3001L;
     private static final long HF20181115_ACTIVATION_BLOCK_HEIGHT = 4001L;

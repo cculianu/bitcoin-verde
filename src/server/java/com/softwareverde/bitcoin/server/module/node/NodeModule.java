@@ -2,6 +2,7 @@ package com.softwareverde.bitcoin.server.module.node;
 
 import com.softwareverde.bitcoin.CoreInflater;
 import com.softwareverde.bitcoin.bip.CoreUpgradeSchedule;
+import com.softwareverde.bitcoin.bip.IntraNetUpgradeSchedule;
 import com.softwareverde.bitcoin.bip.TestNet4UpgradeSchedule;
 import com.softwareverde.bitcoin.bip.TestNetUpgradeSchedule;
 import com.softwareverde.bitcoin.bip.UpgradeSchedule;
@@ -30,6 +31,7 @@ import com.softwareverde.bitcoin.server.Environment;
 import com.softwareverde.bitcoin.server.State;
 import com.softwareverde.bitcoin.server.configuration.BitcoinProperties;
 import com.softwareverde.bitcoin.server.configuration.CheckpointConfiguration;
+import com.softwareverde.bitcoin.server.configuration.IntraNetCheckpointConfiguration;
 import com.softwareverde.bitcoin.server.configuration.NodeProperties;
 import com.softwareverde.bitcoin.server.configuration.TestNetCheckpointConfiguration;
 import com.softwareverde.bitcoin.server.database.Database;
@@ -373,6 +375,7 @@ public class NodeModule {
         _masterInflater = new CoreInflater();
 
         { // Upgrade Schedule
+            final Integer networkVersion = Util.coalesce(bitcoinProperties.getTestNetVersion());
             if (bitcoinProperties.isTestNet()) {
                 final NetworkType networkType = bitcoinProperties.getNetworkType();
                 switch (networkType) {
@@ -383,6 +386,9 @@ public class NodeModule {
                         _upgradeSchedule = new TestNetUpgradeSchedule();
                     }
                 }
+            }
+            else if (networkVersion < 0) { // IntraNet "Test" Network (for private scaling testing).
+                _upgradeSchedule = new IntraNetUpgradeSchedule();
             }
             else {
                 _upgradeSchedule = new CoreUpgradeSchedule();
@@ -416,8 +422,12 @@ public class NodeModule {
 
         { // Block Checkpoints
             final Boolean isTestNet = bitcoinProperties.isTestNet();
+            final Integer networkVersion = Util.coalesce(bitcoinProperties.getTestNetVersion());
             if (isTestNet) {
                 _checkpointConfiguration = new TestNetCheckpointConfiguration();
+            }
+            else if (networkVersion < 0) {
+                _checkpointConfiguration = new IntraNetCheckpointConfiguration();
             }
             else {
                 _checkpointConfiguration = new CheckpointConfiguration();
@@ -650,6 +660,7 @@ public class NodeModule {
                 };
             }
             else {
+                // MainNet (& IntraNet) Difficulty Calculator...
                 _difficultyCalculatorFactory = new DifficultyCalculatorFactory() {
                     @Override
                     public DifficultyCalculator newDifficultyCalculator(final DifficultyCalculatorContext context) {
