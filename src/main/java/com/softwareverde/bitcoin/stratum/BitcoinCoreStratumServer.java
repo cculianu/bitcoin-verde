@@ -385,17 +385,32 @@ public class BitcoinCoreStratumServer implements StratumServer {
         }
 
         if (blockHeader.isValid()) {
-            final BlockHeaderDeflater blockHeaderDeflater = _masterInflater.getBlockHeaderDeflater();
-            Logger.info("Valid Block: " + blockHeaderDeflater.toBytes(blockHeader));
+            if (Logger.isInfoEnabled()) {
+                final BlockHeaderDeflater blockHeaderDeflater = _masterInflater.getBlockHeaderDeflater();
+                Logger.info("Valid Block: " + blockHeaderDeflater.toBytes(blockHeader));
+            }
 
-            final BlockDeflater blockDeflater = _masterInflater.getBlockDeflater();
             final Block block = mineBlockTask.assembleBlock(stratumNonce, stratumExtraNonce2, stratumTimestamp);
-            Logger.info(blockDeflater.toBytes(block));
 
             final BitcoinMiningRpcConnector bitcoinRpcConnector = _rpcConnectionFactory.newBitcoinMiningRpcConnector();
             final Boolean submitBlockResponse = bitcoinRpcConnector.submitBlock(block);
+
             if (! submitBlockResponse) {
                 Logger.warn("Unable to submit block: " + blockHash);
+
+                if (Logger.isInfoEnabled()) {
+                    final BlockDeflater blockDeflater = _masterInflater.getBlockDeflater();
+                    final ByteArray blockBytes = blockDeflater.toBytes(block);
+                    final int byteCount = blockBytes.getByteCount();
+                    final int bufferSize = (1024 * 1024);
+                    // Paginate the block by MB to prevent using excessive memory when logging a huge block.
+                    for (int i = 0; i < (byteCount / bufferSize); ++i) {
+                        final int readIndex = (i * bufferSize);
+                        final int readByteCount = Math.min(bufferSize, (byteCount - readIndex));
+                        final ByteArray buffer = ByteArray.wrap(blockBytes.getBytes(readIndex, readByteCount));
+                        Logger.info(buffer);
+                    }
+                }
             }
 
             _rebuildBlockTemplate();

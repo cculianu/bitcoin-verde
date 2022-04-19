@@ -635,13 +635,12 @@ public class RpcDataHandler implements NodeRpcHandler.DataHandler {
                 blockHeader.setTimestamp(timestamp);
                 blockHeader.setNonce(0L);
 
-                final MutableList<Transaction> blockTransactions = new MutableList<>(unconfirmedTransactions.getCount() + 1);
-                blockTransactions.add(coinbaseTransaction);
+                final MutableList<Transaction> blockTransactions = new MutableList<>(unconfirmedTransactions.getCount());
                 for (final TransactionWithFee transactionWithFee : unconfirmedTransactions) {
                     blockTransactions.add(transactionWithFee.transaction);
                 }
 
-                final Block prototypeBlock = new CanonicalMutableBlock(blockHeader, blockTransactions);
+                final Block prototypeBlock = new CanonicalMutableBlock(blockHeader, coinbaseTransaction, blockTransactions);
 
                 nanoTimer.stop();
                 Logger.debug("Generated prototype block " + prototypeBlock.getHash() + "in " + nanoTimer.getMillisecondsElapsed() + "ms.");

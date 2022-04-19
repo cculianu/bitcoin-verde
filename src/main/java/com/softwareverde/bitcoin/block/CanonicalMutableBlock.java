@@ -3,6 +3,7 @@ package com.softwareverde.bitcoin.block;
 import com.softwareverde.bitcoin.block.header.BlockHeader;
 import com.softwareverde.bitcoin.transaction.Transaction;
 import com.softwareverde.constable.list.List;
+import com.softwareverde.constable.list.immutable.ImmutableList;
 import com.softwareverde.constable.list.mutable.MutableList;
 import com.softwareverde.cryptography.hash.sha256.Sha256Hash;
 
@@ -19,7 +20,27 @@ public class CanonicalMutableBlock extends MutableBlock {
         }
     };
 
-    protected static List<Transaction> sortTransactions(final List<Transaction> transactions) {
+    protected static List<Transaction> sortTransactions(final Transaction coinbaseTransaction, final List<Transaction> transactions) {
+        if ( (transactions == null) || transactions.isEmpty() ) {
+            return new ImmutableList<>(coinbaseTransaction);
+        }
+
+        final int nonCoinbaseTransactionCount = transactions.getCount();
+        final MutableList<Transaction> _transactions = new MutableList<>(nonCoinbaseTransactionCount + 1);
+
+        for (int i = 0; i < nonCoinbaseTransactionCount; ++i) {
+            final Transaction transaction = transactions.get(i);
+            final Transaction constTransaction = transaction.asConst();
+            _transactions.add(constTransaction);
+        }
+        _transactions.sort(LEXICAL_TRANSACTION_ORDERING);
+
+        _transactions.add(0, coinbaseTransaction); // Adds the coinbase to the front...
+
+        return _transactions;
+    }
+
+    protected static List<Transaction> sortTransactionsWithCoinbase(final List<Transaction> transactions) {
         final int transactionCount = transactions.getCount();
         final MutableList<Transaction> _transactions = new MutableList<>(transactionCount);
         if (transactions.isEmpty()) { return _transactions; }
@@ -29,9 +50,10 @@ public class CanonicalMutableBlock extends MutableBlock {
             final Transaction constTransaction = transaction.asConst();
             _transactions.add(constTransaction);
         }
-
         _transactions.sort(LEXICAL_TRANSACTION_ORDERING);
-        _transactions.add(0, transactions.get(0)); // Adds the coinbase to the front...
+
+        final Transaction coinbaseTransaction = transactions.get(0);
+        _transactions.add(0, coinbaseTransaction); // Adds the coinbase to the front...
         return _transactions;
     }
 
@@ -82,12 +104,12 @@ public class CanonicalMutableBlock extends MutableBlock {
         super(blockHeader);
     }
 
-    public CanonicalMutableBlock(final BlockHeader blockHeader, final List<Transaction> transactions) {
-        super(blockHeader, CanonicalMutableBlock.sortTransactions(transactions));
+    public CanonicalMutableBlock(final BlockHeader blockHeader, final Transaction coinbaseTransaction, final List<Transaction> transactions) {
+        super(blockHeader, CanonicalMutableBlock.sortTransactions(coinbaseTransaction, transactions));
     }
 
     public CanonicalMutableBlock(final Block block) {
-        this(block, block.getTransactions());
+        super(block, CanonicalMutableBlock.sortTransactionsWithCoinbase(block.getTransactions()));
     }
 
     @Override
@@ -117,12 +139,9 @@ public class CanonicalMutableBlock extends MutableBlock {
         _transactions.clear();
         _merkleTree.clear();
 
-        _transactions.add(coinbaseTransaction);
-        _merkleTree.addItem(coinbaseTransaction);
-
         if (transactions == null) { return; }
 
-        final List<Transaction> sortedTransactions = CanonicalMutableBlock.sortTransactions(transactions);
+        final List<Transaction> sortedTransactions = CanonicalMutableBlock.sortTransactions(coinbaseTransaction, transactions);
         _transactions.addAll(sortedTransactions);
         for (final Transaction transaction : sortedTransactions) {
             _merkleTree.addItem(transaction);
