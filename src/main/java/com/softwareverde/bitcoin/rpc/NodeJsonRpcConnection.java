@@ -7,6 +7,7 @@ import com.softwareverde.bitcoin.block.BlockDeflater;
 import com.softwareverde.bitcoin.block.header.BlockHeader;
 import com.softwareverde.bitcoin.block.header.BlockHeaderInflater;
 import com.softwareverde.bitcoin.inflater.MasterInflater;
+import com.softwareverde.bitcoin.server.main.BitcoinConstants;
 import com.softwareverde.bitcoin.transaction.Transaction;
 import com.softwareverde.bitcoin.transaction.TransactionDeflater;
 import com.softwareverde.bitcoin.transaction.TransactionInflater;
@@ -21,6 +22,7 @@ import com.softwareverde.json.Json;
 import com.softwareverde.logging.Logger;
 import com.softwareverde.network.socket.JsonProtocolMessage;
 import com.softwareverde.network.socket.JsonSocket;
+import com.softwareverde.util.ByteUtil;
 import com.softwareverde.util.timer.NanoTimer;
 
 public class NodeJsonRpcConnection implements AutoCloseable {
@@ -292,6 +294,10 @@ public class NodeJsonRpcConnection implements AutoCloseable {
         return _executeJsonRequest(rpcRequestJson);
     }
 
+    protected Integer _calculateMaxPacketSize() {
+        return (int) ( (BitcoinConstants.getBlockMaxByteCount() * 2L) + (2L * ByteUtil.Unit.Binary.KIBIBYTES) );
+    }
+
     public NodeJsonRpcConnection(final String hostname, final Integer port, final ThreadPool threadPool) {
         this(
             hostname,
@@ -316,7 +322,8 @@ public class NodeJsonRpcConnection implements AutoCloseable {
             javaSocket = socket;
         }
 
-        _jsonSocket = ((javaSocket != null) ? new JsonSocket(javaSocket, threadPool) : null);
+        final Integer maxPacketSize = _calculateMaxPacketSize();
+        _jsonSocket = ((javaSocket != null) ? new JsonSocket(javaSocket, threadPool, maxPacketSize) : null);
 
         if (_jsonSocket != null) {
             _jsonSocket.setMessageReceivedCallback(_onNewMessageCallback);
@@ -334,7 +341,8 @@ public class NodeJsonRpcConnection implements AutoCloseable {
     public NodeJsonRpcConnection(final java.net.Socket socket, final ThreadPool threadPool, final MasterInflater masterInflater) {
         _masterInflater = masterInflater;
 
-        _jsonSocket = ((socket != null) ? new JsonSocket(socket, threadPool) : null);
+        final Integer maxPacketSize = _calculateMaxPacketSize();
+        _jsonSocket = ((socket != null) ? new JsonSocket(socket, threadPool, maxPacketSize) : null);
 
         if (_jsonSocket != null) {
             _jsonSocket.setMessageReceivedCallback(_onNewMessageCallback);

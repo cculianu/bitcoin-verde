@@ -202,7 +202,7 @@ public class BitcoinVerdeRpcConnector implements BitcoinMiningRpcConnector {
             responseJson = nodeJsonRpcConnection.submitBlock(block);
         }
         if (responseJson == null) {
-            Logger.warn("Unable to validate template block.");
+            Logger.warn("Unable to submit block.");
             return false;
         }
 
