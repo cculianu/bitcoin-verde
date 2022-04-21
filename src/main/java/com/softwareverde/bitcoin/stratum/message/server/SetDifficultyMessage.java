@@ -1,6 +1,6 @@
-package com.softwareverde.bitcoin.server.stratum.message.server;
+package com.softwareverde.bitcoin.stratum.message.server;
 
-import com.softwareverde.bitcoin.server.stratum.message.RequestMessage;
+import com.softwareverde.bitcoin.stratum.message.RequestMessage;
 import com.softwareverde.json.Json;
 
 public class SetDifficultyMessage extends RequestMessage {

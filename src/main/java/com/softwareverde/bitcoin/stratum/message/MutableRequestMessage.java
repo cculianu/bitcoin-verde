@@ -1,4 +1,4 @@
-package com.softwareverde.bitcoin.server.stratum.message;
+package com.softwareverde.bitcoin.stratum.message;
 
 import com.softwareverde.json.Json;
 

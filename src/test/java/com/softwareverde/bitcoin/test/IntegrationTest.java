@@ -43,8 +43,6 @@ import com.softwareverde.database.mysql.MysqlDatabaseConnectionFactory;
 import com.softwareverde.database.mysql.MysqlDatabaseInitializer;
 import com.softwareverde.database.mysql.connection.ReadUncommittedDatabaseConnectionFactory;
 import com.softwareverde.database.row.Row;
-import com.softwareverde.logging.LogLevel;
-import com.softwareverde.logging.Logger;
 import com.softwareverde.test.database.MysqlTestDatabase;
 import com.softwareverde.test.database.TestDatabase;
 import com.softwareverde.util.Container;

@@ -1,7 +1,7 @@
-package com.softwareverde.bitcoin.server.stratum.message.server;
+package com.softwareverde.bitcoin.stratum.message.server;
 
-import com.softwareverde.bitcoin.server.stratum.message.RequestMessage;
-import com.softwareverde.bitcoin.server.stratum.message.ResponseMessage;
+import com.softwareverde.bitcoin.stratum.message.RequestMessage;
+import com.softwareverde.bitcoin.stratum.message.ResponseMessage;
 import com.softwareverde.constable.bytearray.ByteArray;
 import com.softwareverde.constable.list.mutable.MutableList;
 import com.softwareverde.json.Json;

@@ -1,6 +1,6 @@
-package com.softwareverde.bitcoin.server.stratum.message.server;
+package com.softwareverde.bitcoin.stratum.message.server;
 
-import com.softwareverde.bitcoin.server.stratum.message.ResponseMessage;
+import com.softwareverde.bitcoin.stratum.message.ResponseMessage;
 
 public class MinerSubmitBlockResponseMessage extends ResponseMessage {
     public MinerSubmitBlockResponseMessage(final Integer messageId) {

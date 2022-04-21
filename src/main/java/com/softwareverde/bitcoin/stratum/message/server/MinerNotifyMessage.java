@@ -1,8 +1,8 @@
 package com.softwareverde.bitcoin.stratum.message.server;
 
 import com.softwareverde.bitcoin.block.header.difficulty.Difficulty;
-import com.softwareverde.bitcoin.server.stratum.message.RequestMessage;
 import com.softwareverde.bitcoin.server.stratum.task.StratumUtil;
+import com.softwareverde.bitcoin.stratum.message.RequestMessage;
 import com.softwareverde.bitcoin.util.ByteUtil;
 import com.softwareverde.constable.bytearray.ByteArray;
 import com.softwareverde.constable.list.List;
