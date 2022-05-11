@@ -666,6 +666,8 @@ public class BitcoinCoreStratumServer implements StratumServer {
     @Override
     public void setCoinbaseAddress(final Address address) {
         _coinbaseAddress = address;
+
+        // TODO: Consider rebuilding the block template via _rebuildBlockTemplate...
     }
 
     public Boolean submitShare(final Json messageParameters) {

@@ -1,5 +1,6 @@
 package com.softwareverde.bitcoin.rpc;
 
+import com.softwareverde.bitcoin.block.Block;
 import com.softwareverde.bitcoin.block.header.difficulty.Difficulty;
 import com.softwareverde.bitcoin.transaction.Transaction;
 import com.softwareverde.constable.bytearray.ByteArray;
@@ -8,6 +9,12 @@ import com.softwareverde.logging.Logger;
 import com.softwareverde.util.Util;
 
 public class MutableBlockTemplate extends BlockTemplate {
+    public MutableBlockTemplate() { }
+
+    public MutableBlockTemplate(final Block block, final Long blockHeight) {
+        super(block, blockHeight);
+    }
+
     public void setBlockHeight(final Long blockHeight) {
         _blockHeight = blockHeight;
     }

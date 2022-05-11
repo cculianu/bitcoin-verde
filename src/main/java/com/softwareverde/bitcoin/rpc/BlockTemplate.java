@@ -2,11 +2,13 @@ package com.softwareverde.bitcoin.rpc;
 
 import com.softwareverde.bitcoin.address.Address;
 import com.softwareverde.bitcoin.address.AddressInflater;
+import com.softwareverde.bitcoin.block.Block;
 import com.softwareverde.bitcoin.block.MutableBlock;
 import com.softwareverde.bitcoin.block.header.difficulty.Difficulty;
 import com.softwareverde.bitcoin.transaction.Transaction;
 import com.softwareverde.bitcoin.transaction.TransactionDeflater;
 import com.softwareverde.bitcoin.transaction.TransactionInflater;
+import com.softwareverde.bitcoin.transaction.coinbase.CoinbaseTransaction;
 import com.softwareverde.constable.bytearray.ByteArray;
 import com.softwareverde.constable.list.List;
 import com.softwareverde.constable.list.mutable.MutableList;
@@ -43,6 +45,34 @@ public class BlockTemplate implements Jsonable {
     protected String _longPollId;
     protected final MutableList<String> _capabilities = new MutableList<>(0);
     protected final MutableList<String> _mutableFields = new MutableList<>(0);
+
+    protected BlockTemplate() { }
+
+    public BlockTemplate(final Block block, final Long blockHeight) {
+        final MutableBlockTemplate blockTemplate = new MutableBlockTemplate();
+        _blockVersion = block.getVersion();
+        _difficulty = block.getDifficulty();
+        _previousBlockHash = block.getPreviousBlockHash();
+        _blockHeight = blockHeight;
+
+        final CoinbaseTransaction coinbaseTransaction = block.getCoinbaseTransaction();
+        _coinbaseAmount = coinbaseTransaction.getTotalOutputValue();
+
+        final Long blockTime = block.getTimestamp();
+        blockTemplate.setMinimumBlockTime(blockTime);
+        blockTemplate.setCurrentTime(blockTime);
+
+        boolean isCoinbase = true;
+        final List<Transaction> transactions = block.getTransactions();
+        for (final Transaction transaction : transactions) {
+            if (isCoinbase) {
+                isCoinbase = false;
+                continue;
+            }
+
+            blockTemplate.addTransaction(transaction, 0L, 0);
+        }
+    }
 
     public Long getBlockHeight() {
         return _blockHeight;

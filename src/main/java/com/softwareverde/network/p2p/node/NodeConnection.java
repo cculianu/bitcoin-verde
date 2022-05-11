@@ -1,5 +1,6 @@
 package com.softwareverde.network.p2p.node;
 
+import com.softwareverde.bitcoin.server.main.BitcoinConstants;
 import com.softwareverde.concurrent.threadpool.ThreadPool;
 import com.softwareverde.logging.Logger;
 import com.softwareverde.network.ip.Ip;
@@ -73,7 +74,8 @@ public class NodeConnection {
             }
 
             if ( (socket != null) && (socket.isConnected()) ) {
-                _binarySocket = new BinarySocket(socket, _binaryPacketFormat, _threadPool);
+                final Integer maxBufferByteCount = (2 * BitcoinConstants.getBlockMaxByteCount());
+                _binarySocket = new BinarySocket(socket, _binaryPacketFormat, _threadPool, BinarySocket.DEFAULT_BUFFER_PAGE_BYTE_COUNT, maxBufferByteCount);
                 _binarySocket.setOnClosedCallback(new Runnable() {
                     @Override
                     public void run() {
