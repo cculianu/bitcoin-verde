@@ -91,9 +91,9 @@ public class MutableBlock extends AbstractBlockHeader implements Block {
 
     @Override
     public Boolean hasTransaction(final Sha256Hash transactionHash) {
-        for (final Transaction existingTransaction : _transactions) {
-            final Sha256Hash existingTransactionHash = existingTransaction.getHash();
-            if (Util.areEqual(transactionHash, existingTransactionHash)) {
+        for (final Transaction blockTransaction : _transactions) {
+            final Sha256Hash blockTransactionHash = blockTransaction.getHash();
+            if (Util.areEqual(transactionHash, blockTransactionHash)) {
                 return true;
             }
         }
@@ -237,6 +237,18 @@ public class MutableBlock extends AbstractBlockHeader implements Block {
 
         final Transaction transaction = _transactions.get(0);
         return transaction.asCoinbase();
+    }
+
+    @Override
+    public Transaction getTransaction(final Sha256Hash transactionHash) {
+        for (final Transaction blockTransaction : _transactions) {
+            final Sha256Hash blockTransactionHash = blockTransaction.getHash();
+            if (Util.areEqual(transactionHash, blockTransactionHash)) {
+                return blockTransaction;
+            }
+        }
+
+        return null;
     }
 
     @Override

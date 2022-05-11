@@ -137,6 +137,18 @@ public class ImmutableBlock extends ImmutableBlockHeader implements Block, Const
     }
 
     @Override
+    public Transaction getTransaction(final Sha256Hash transactionHash) {
+        for (final Transaction blockTransaction : _transactions) {
+            final Sha256Hash blockTransactionHash = blockTransaction.getHash();
+            if (Util.areEqual(transactionHash, blockTransactionHash)) {
+                return blockTransaction;
+            }
+        }
+
+        return null;
+    }
+
+    @Override
     public MerkleTree<Transaction> getMerkleTree() {
         if (_merkleTree == null) {
             _buildMerkleTree();
@@ -146,9 +158,9 @@ public class ImmutableBlock extends ImmutableBlockHeader implements Block, Const
 
     @Override
     public Boolean hasTransaction(final Sha256Hash transactionHash) {
-        for (final Transaction existingTransaction : _transactions) {
-            final Sha256Hash existingTransactionHash = existingTransaction.getHash();
-            if (Util.areEqual(transactionHash, existingTransactionHash)) {
+        for (final Transaction blockTransaction : _transactions) {
+            final Sha256Hash blockTransactionHash = blockTransaction.getHash();
+            if (Util.areEqual(transactionHash, blockTransactionHash)) {
                 return true;
             }
         }
