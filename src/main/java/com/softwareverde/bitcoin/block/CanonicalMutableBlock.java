@@ -137,13 +137,11 @@ public class CanonicalMutableBlock extends MutableBlock {
 
     public void setTransactions(final Transaction coinbaseTransaction, final List<Transaction> transactions) {
         _transactions.clear();
-        _merkleTree.clear();
-
-        if (transactions == null) { return; }
-
         final List<Transaction> sortedTransactions = CanonicalMutableBlock.sortTransactions(coinbaseTransaction, transactions);
         _transactions.addAll(sortedTransactions);
-        for (final Transaction transaction : sortedTransactions) {
+
+        _merkleTree.clear();
+        for (final Transaction transaction : _transactions) {
             _merkleTree.addItem(transaction);
         }
 

@@ -688,12 +688,6 @@ public class NodeModule {
 
             _bitcoinNodeManager = new BitcoinNodeManager(context);
             _bitcoinNodeManager.setDefaultExternalPort(bitcoinProperties.getBitcoinPort());
-            _bitcoinNodeManager.setNewNodeHandshakedCallback(new BitcoinNodeManager.NewNodeCallback() {
-                @Override
-                public void onNodeHandshakeComplete(final BitcoinNode bitcoinNode) {
-                    _blockDownloader.wakeUp();
-                }
-            });
 
             final BitcoinNodeHeadBlockFinder bitcoinNodeHeadBlockFinder = new BitcoinNodeHeadBlockFinder(databaseManagerFactory, _generalThreadPool, _banFilter);
             _bitcoinNodeManager.setNewNodeHandshakedCallback(new BitcoinNodeManager.NewNodeCallback() {
@@ -709,6 +703,15 @@ public class NodeModule {
                             catch (final DatabaseException databaseException) {
                                 Logger.debug(databaseException);
                             }
+
+                            _blockHeaderDownloader.wakeUp();
+                            _blockDownloader.wakeUp();
+                        }
+
+                        @Override
+                        public void onFailure() {
+                            _blockHeaderDownloader.wakeUp();
+                            _blockDownloader.wakeUp();
                         }
                     });
                 }
